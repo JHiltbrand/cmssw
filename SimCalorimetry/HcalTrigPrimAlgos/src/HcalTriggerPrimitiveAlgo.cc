@@ -125,7 +125,7 @@ update_legacy(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int s
 
 }
 
-HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<double>& w, int latency,
+HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<double>& hbw, const std::vector<double>& he1w, const std::vector<double>& he2w, int latency,
                                                     uint32_t FG_threshold, const std::vector<uint32_t>& FG_HF_thresholds, uint32_t ZS_threshold,
                                                     int numberOfSamples, int numberOfPresamples,
                                                     int numberOfSamplesHF, int numberOfPresamplesHF, bool useTDCInMinBiasBits,
@@ -133,7 +133,7 @@ HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<d
 						    bool upgrade
                                                     )
                                                    : incoder_(nullptr), outcoder_(nullptr),
-                                                   theThreshold(0), peakfind_(pf), weights_(w), latency_(latency),
+                                                   theThreshold(0), peakfind_(pf), hbWeights_(hbw), he1Weights_(he1w), he2Weights_(he2w), latency_(latency),
                                                    FG_threshold_(FG_threshold), FG_HF_thresholds_(FG_HF_thresholds), ZS_threshold_(ZS_threshold),
                                                    numberOfSamples_(numberOfSamples),
                                                    numberOfPresamples_(numberOfPresamples),
@@ -398,16 +398,16 @@ void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples, int
 
 
 void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result) {
-   int shrink = weights_.size() - 1;
+   int shrink = he1Weights_.size() - 1;
    std::vector<bool>& msb = fgMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
    //slide algo window
    for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
       int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
+      for(unsigned int i = 0; i < he1Weights_.size(); i++) {
          //add up value * scale factor
-         algosumvalue += int(samples[ibin+i] * weights_[i]);
+         algosumvalue += int(samples[ibin+i] * he1Weights_[i]);
       }
       if (algosumvalue<0) sum[ibin]=0;            // low-side
                                                   //high-side
@@ -477,16 +477,16 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTrigger
 }
 
 void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgradeTriggerPrimitiveDigi & result) {
-   int shrink = weights_.size() - 1;
+   int shrink = he1Weights_.size() - 1;
    std::vector<bool>& msb = fgMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
    //slide algo window
    for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
       int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
+      for(unsigned int i = 0; i < he1Weights_.size(); i++) {
          //add up value * scale factor
-         algosumvalue += int(samples[ibin+i] * weights_[i]);
+         algosumvalue += int(samples[ibin+i] * he1Weights_[i]);
       }
       if (algosumvalue<0) sum[ibin]=0;            // low-side
                                                   //high-side
@@ -546,8 +546,8 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
             if (ibin == numberOfPresamples_) {
                for (int d = 0; d < 3; ++d) {
                   auto algosumvalue = 0;
-                  for (unsigned int i = 0; i < weights_.size(); ++i)
-                   algosumvalue   += int(theDepthMap[samples.id()][d][idx + i] * weights_[i]);
+                  for (unsigned int i = 0; i < he1Weights_.size(); ++i)
+                   algosumvalue   += int(theDepthMap[samples.id()][d][idx + i] * he1Weights_[i]);
                   depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE8_LINEARIZATION_ET);
                }
             }
@@ -564,8 +564,8 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
          if (ibin == numberOfPresamples_) {
             for (int d = 0; d < 3; ++d) {
                auto algosumvalue = 0;
-               for (unsigned int i = 0; i < weights_.size(); ++i)
-                  algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * weights_[i]);
+               for (unsigned int i = 0; i < he1Weights_.size(); ++i)
+                  algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * he1Weights_[i]);
                depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE8_LINEARIZATION_ET);
             }
          }
@@ -586,7 +586,7 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
-  int shrink = weights_.size() - 1;
+  int shrink = he1Weights_.size() - 1;
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
@@ -595,14 +595,14 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
    //slide algo window
    for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
       int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
+      for(unsigned int i = 0; i < he1Weights_.size(); i++) {
 	//add up value * scale factor
 	// In addition, divide by two in the 10 degree phi segmentation region
 	// to mimic 5 degree segmentation for the trigger
 	unsigned int sample = samples[ibin+i];
 	if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
-	if(ids.size()==2) algosumvalue += int(sample * 0.5 * weights_[i]);
-	else algosumvalue += int(sample * weights_[i]);
+	if(ids.size()==2) algosumvalue += int(sample * 0.5 * he1Weights_[i]);
+	else algosumvalue += int(sample * he1Weights_[i]);
       }
       if (algosumvalue<0) sum[ibin]=0;            // low-side
                                                   //high-side
@@ -651,58 +651,73 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
-  int shrink = weights_.size() - 1;
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
+   IntegerCaloSamples bsum(samples.id(), samples.size());
 
    HcalDetId detId(samples.id());
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
+   std::vector<double> theWeights;
+   int theIeta = detId.ietaAbs();
+   if (theIeta <= 16) {theWeights = hbWeights_;}
+   else if (theIeta > 16 && theIeta <= 21) {theWeights = he1Weights_;}
+   else {theWeights = he2Weights_;}
+
+   int shrink = theWeights.size() - 1;
+
    // store individual sample data
    // std::map<int, std::vector<int>> thesampledata; //first=ibin, second=sample
+   // Save the 8TS digi as the TP for weight studies
    std::vector<int> thesampledata(8, 0);
+   for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
+       thesampledata[ibin] = samples[ibin];
+   }
 
    //slide algo window
-   for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
-      int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
-	//add up value * scale factor
-	// In addition, divide by two in the 10 degree phi segmentation region
-	// to mimic 5 degree segmentation for the trigger
-	unsigned int sample = samples[ibin+i]; //samples[ibin+i];
-	//	printf("ibin= %d and i=%d, so ibin+i=%d and sample[ibin+i]=%u\n",ibin,i,ibin+i,sample);    
+   for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
+       int algosumvalue = 0;
+       int balgosumvalue = 0;
+       for(unsigned int i = 0; i < theWeights.size(); i++) {
+	       //add up value * scale factor
+	       // In addition, divide by two in the 10 degree phi segmentation region
+	       // to mimic 5 degree segmentation for the trigger
+	       unsigned int sample = samples[ibin+i]; //samples[ibin+i];
+	       //	printf("ibin= %d and i=%d, so ibin+i=%d and sample[ibin+i]=%u\n",ibin,i,ibin+i,sample);    
 
-	if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
-	if(ids.size()==2) {
-	  thesampledata.push_back(int(sample * 0.5 * weights_[i]));
-	  algosumvalue += int(sample * 0.5 * weights_[i]);
-	}
-	else {
-	  thesampledata.push_back(int(sample * weights_[i]));
-	  algosumvalue += int(sample * weights_[i]);
-	}
-      }
-      /*
-      if(peakfind_ && peak_finder_algorithm_ == 3) {
-	int pedsumvalue = 0;
-	if(ids.size()==2) pedsumvalue = samples[ibin-1];
-	else pedsumvalue = 2 * samples[ibin-1];
-	algosumvalue -= pedsumvalue;
-      }
-      */
-      if (algosumvalue<0) {
-	sum[ibin]=0;            // low-side
-      //else if (algosumvalue>QIE11_LINEARIZATION_ET) sum[ibin]=QIE11_LINEARIZATION_ET;
-      } else {
-	sum[ibin] = algosumvalue;              //assign value to sum[]
-      }
+	       if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+	       if(ids.size()==2) {
+	         algosumvalue += int(sample * 0.5 * theWeights[i]);
+             balgosumvalue += int(sample * 0.5);
+	       }
+	       else {
+	         algosumvalue += int(sample * theWeights[i]);
+             balgosumvalue += int(sample);
+	       }
+      
+           /*
+           if(peakfind_ && peak_finder_algorithm_ == 3) {
+	       int pedsumvalue = 0;
+	       if(ids.size()==2) pedsumvalue = samples[ibin-1];
+	       else pedsumvalue = 2 * samples[ibin-1];
+	       algosumvalue -= pedsumvalue;
+           }
+           */
+           bsum[ibin]=balgosumvalue;
+           if (algosumvalue<0) {
+	           sum[ibin]=0;            // low-side
+           //else if (algosumvalue>QIE11_LINEARIZATION_ET) sum[ibin]=QIE11_LINEARIZATION_ET;
+           } else {
+	           sum[ibin] = algosumvalue;              //assign value to sum[]
+           }
+       }
    }
 
    // Align digis and TP
    int dgPresamples=samples.presamples(); //3
    int tpPresamples=numberOfPresamples_;//2
    int shift = dgPresamples - tpPresamples; // shift=1 and shrink=4weights-1 = 3
-   //   int dgSamples=samples.size(); //8
+   int dgSamples=samples.size(); //8
    int tpSamples=numberOfSamples_; //4
 
    // vector data to store per sample info for reconstructing pulse shape
@@ -710,15 +725,14 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
    // vector data to store the depth info for the SOI sample only
    std::vector<int> depth_sums(8, 0);
    
-   /*
-   if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
-     edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
-       "TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
-     //  shift=shrink; // shift=3
-     tpPresamples=dgPresamples-shrink;// =0
-     tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift; //8-2-3-1=2
-   }
-   */
+   // To include or not to include, that is the question
+   //if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
+   //  edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
+   //    "TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
+   //  //  shift=shrink; // shift=3
+   //  tpPresamples=dgPresamples-shrink;// =0
+   //  tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift; //8-2-3-1=2
+   //}
    std::vector<int> finegrain(tpSamples,false);
 
    IntegerCaloSamples output(samples.id(), tpSamples);
@@ -733,6 +747,7 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
      
      if (isPeak){
        output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
+
        //       printf("++++++++InPeak, sum is=%u\n",sum[idx]);
        /*
        std::map<int, std::vector<int>>::iterator it;
@@ -748,11 +763,11 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        if (ibin == numberOfPresamples_) {
 	 for (int d = 0; d < 8; ++d) {
 	   auto algosumvalue = 0;
-	   for (unsigned int i = 0; i < weights_.size(); ++i)
-	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * weights_[i]);
+	   for (unsigned int i = 0; i < theWeights.size(); ++i)
+	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	   depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	 }
-       }
+      }
      } else {
        // Not a peak
        output[ibin] = 0;
@@ -761,8 +776,8 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        if (ibin == numberOfPresamples_) {
 	 for (int d = 0; d < 8; ++d) {
 	   auto algosumvalue = 0;
-	   for (unsigned int i = 0; i < weights_.size(); ++i)
-	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * weights_[i]);
+	   for (unsigned int i = 0; i < theWeights.size(); ++i)
+	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	   depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	 }
        }
@@ -770,6 +785,12 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
      // peak-finding is not applied for FG bits
      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
    }
+
+   //if (theIeta == 25) {
+   //    std::cout << "ieta: " << detId.ietaAbs() << ", aPulse: [" << samples[0] << " " << samples[1] << " " << samples[2] << " " << samples[3] << " " << samples[4] << " " << samples[5] << " " << samples[6] << " " << samples[7] << "]" << std::endl;
+   //    std::cout << "windowSumBefore: [" << bsum[0] << " " << bsum[1] << " " << bsum[2] << " (" << bsum[3] << ") " << bsum[4] << " " << bsum[5] << " " << bsum[6] << " " << bsum[7] << "]" << std::endl;
+   //    std::cout << "windowSumAfter: [" << sum[0] << " " << sum[1] << " " << sum[2] << " (" << sum[3] << ") " << sum[4] << " " << sum[5] << " " << sum[6] << " " << sum[7] << "]\n" << std::endl;
+   //}
    outcoder_->compress(output, finegrain, result);
    
    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata); 
