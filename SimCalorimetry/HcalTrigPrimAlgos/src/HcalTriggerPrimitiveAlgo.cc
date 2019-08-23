@@ -160,8 +160,8 @@ HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<d
 
 
 HcalTriggerPrimitiveAlgo::~HcalTriggerPrimitiveAlgo() {
-}
 
+}
 
 void
 HcalTriggerPrimitiveAlgo::setUpgradeFlags(bool hb, bool he, bool hf)
@@ -586,7 +586,7 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
-  int shrink = he1Weights_.size() - 1;
+   int shrink = he1Weights_.size() - 1;
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
@@ -653,18 +653,13 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
 {
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
-   IntegerCaloSamples bsum(samples.id(), samples.size());
 
    HcalDetId detId(samples.id());
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
-   std::vector<double> theWeights;
    int theIeta = detId.ietaAbs();
-   if (theIeta <= 16) {theWeights = hbWeights_;}
-   else if (theIeta > 16 && theIeta <= 21) {theWeights = he1Weights_;}
-   else {theWeights = he2Weights_;}
-
-   int shrink = theWeights.size() - 1;
+   int theIphi = detId.iphi();
+   int shrink = numberOfSamples_ - 1;
 
    // store individual sample data
    // std::map<int, std::vector<int>> thesampledata; //first=ibin, second=sample
@@ -674,11 +669,19 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        thesampledata[ibin] = samples[ibin];
    }
 
+   bool ifPrint = (theIeta == 85 && samples[3] > 10);
+
+   if (ifPrint) {
+       std::cout << "\nieta " << theIeta << " | iphi " << theIphi << " | 8TS [" << samples[0] << ", " << samples[1] << ", " << samples[2] << ", " << samples[3] << ", " << samples[4] << ", " << samples[5] << ", " << samples[6] << ", " << samples[7] << "]" << std::endl;
+
+    }
+   double segmentationFactor = 1.0;
+   if (ids.size() == 2) segmentationFactor = 0.5;
+
    //slide algo window
    for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
        int algosumvalue = 0;
-       int balgosumvalue = 0;
-       for(unsigned int i = 0; i < theWeights.size(); i++) {
+       for(int i = 0; i < numberOfSamples_; i++) {
 	       //add up value * scale factor
 	       // In addition, divide by two in the 10 degree phi segmentation region
 	       // to mimic 5 degree segmentation for the trigger
@@ -686,30 +689,39 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
 	       //	printf("ibin= %d and i=%d, so ibin+i=%d and sample[ibin+i]=%u\n",ibin,i,ibin+i,sample);    
 
 	       if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
-	       if(ids.size()==2) {
-	         algosumvalue += int(sample * 0.5 * theWeights[i]);
-             balgosumvalue += int(sample * 0.5);
-	       }
-	       else {
-	         algosumvalue += int(sample * theWeights[i]);
-             balgosumvalue += int(sample);
-	       }
-      
-           /*
-           if(peakfind_ && peak_finder_algorithm_ == 3) {
-	       int pedsumvalue = 0;
-	       if(ids.size()==2) pedsumvalue = samples[ibin-1];
-	       else pedsumvalue = 2 * samples[ibin-1];
-	       algosumvalue -= pedsumvalue;
-           }
-           */
-           bsum[ibin]=balgosumvalue;
-           if (algosumvalue<0) {
-	           sum[ibin]=0;            // low-side
-           //else if (algosumvalue>QIE11_LINEARIZATION_ET) sum[ibin]=QIE11_LINEARIZATION_ET;
-           } else {
-	           sum[ibin] = algosumvalue;              //assign value to sum[]
-           }
+
+           // Reserve PFA [50,60) for PFA2p algorithm and PFA [60,70) for PFA3p. Use unity weights for PFA2p,PFA3p here
+	       algosumvalue += int(sample * segmentationFactor);
+
+       }
+       // For PFA2p use the presamples to get an additional factor to add to algosum
+       // Since we are in nested loop, add weighted presample to sum once when i == 0 only
+       if ((peak_finder_algorithm_ >= 50 && peak_finder_algorithm_ < 60) ||
+           (peak_finder_algorithm_ >= 20 && peak_finder_algorithm_ < 30)) {
+
+           int presamplevalue = 0;
+
+           if (ibin >= 1) {presamplevalue += int(samples[ibin-1] * segmentationFactor * weights_[theIeta][1]);}
+           if (ibin >= 2) {presamplevalue += int(samples[ibin-2] * segmentationFactor * weights_[theIeta][0]);}
+           
+           algosumvalue += presamplevalue;
+       }
+
+       else if ((peak_finder_algorithm_ >= 60 && peak_finder_algorithm_ < 70) ||
+                (peak_finder_algorithm_ >= 10 && peak_finder_algorithm_ < 20)) {
+
+           int presamplevalue = 0;
+
+           if (ibin >= 1) {presamplevalue += int(samples[ibin-1] * segmentationFactor * weights_[theIeta][0]);}
+
+           algosumvalue += presamplevalue; 
+   
+       }
+       if (algosumvalue<0) {
+	       sum[ibin]=0;            // low-side
+       //} else if (algosumvalue>QIE11_LINEARIZATION_ET) { sum[ibin]=QIE11_LINEARIZATION_ET;
+       } else {
+	       sum[ibin] = algosumvalue;              //assign value to sum[]
        }
    }
 
@@ -744,7 +756,7 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
      int idx = ibin + shift;
 
      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
-     
+
      if (isPeak){
        output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
 
@@ -763,8 +775,9 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        if (ibin == numberOfPresamples_) {
 	 for (int d = 0; d < 8; ++d) {
 	   auto algosumvalue = 0;
-	   for (unsigned int i = 0; i < theWeights.size(); ++i)
-	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
+	   for (unsigned int i = 0; i < weights_[1].size(); ++i)
+	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * he1Weights_[i]);
+	     //algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	   depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	 }
       }
@@ -776,8 +789,9 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        if (ibin == numberOfPresamples_) {
 	 for (int d = 0; d < 8; ++d) {
 	   auto algosumvalue = 0;
-	   for (unsigned int i = 0; i < theWeights.size(); ++i)
-	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
+	   for (unsigned int i = 0; i < weights_[1].size(); ++i)
+	     algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * he1Weights_[i]);
+	     //algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	   depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	 }
        }
@@ -786,13 +800,7 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
    }
 
-   //if (theIeta == 25) {
-   //    std::cout << "ieta: " << detId.ietaAbs() << ", aPulse: [" << samples[0] << " " << samples[1] << " " << samples[2] << " " << samples[3] << " " << samples[4] << " " << samples[5] << " " << samples[6] << " " << samples[7] << "]" << std::endl;
-   //    std::cout << "windowSumBefore: [" << bsum[0] << " " << bsum[1] << " " << bsum[2] << " (" << bsum[3] << ") " << bsum[4] << " " << bsum[5] << " " << bsum[6] << " " << bsum[7] << "]" << std::endl;
-   //    std::cout << "windowSumAfter: [" << sum[0] << " " << sum[1] << " " << sum[2] << " (" << sum[3] << ") " << sum[4] << " " << sum[5] << " " << sum[6] << " " << sum[7] << "]\n" << std::endl;
-   //}
    outcoder_->compress(output, finegrain, result);
-   
    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata); 
 }
 
@@ -1269,6 +1277,377 @@ void HcalTriggerPrimitiveAlgo::setPeakFinderAlgorithm(int algo){
    if (algo <=0 && algo>2)
       throw cms::Exception("ERROR: Only algo 1 & 2 are supported.") << std::endl;
    peak_finder_algorithm_ = algo;
+
+    // PFA1
+    if (peak_finder_algorithm_ == 10) {
+        // per-eta weights when fixing w3 = 1 (1 PS) 
+        weights_ =
+        {{1, {0.0}},
+        {2,  {0.0}},
+        {3,  {0.0}},
+        {4,  {0.0}},
+        {5,  {0.0}},
+        {6,  {0.0}},
+        {7,  {0.0}},
+        {8,  {0.0}},
+        {9,  {0.0}},
+        {10, {0.0}},
+        {11, {0.0}},
+        {12, {0.0}},
+        {13, {0.0}},
+        {14, {0.0}},
+        {15, {0.0}},
+        {16, {0.0}},
+        {17, {0.0}},
+        {18, {0.0}},
+        {19, {0.0}},
+        {20, {0.0}},
+        {21, {0.0}},
+        {22, {0.0}},
+        {23, {0.0}},
+        {24, {0.0}},
+        {25, {0.0}},
+        {26, {0.0}},
+        {27, {0.0}},
+        {28, {0.0}}};
+
+    // PFA1p
+    } else if (peak_finder_algorithm_ == 20) {
+        // per-eta weights when fixing w3 = 1 (2 PS) 
+        weights_ =
+        {{1, {0.0, 0.0}},
+        {2,  {0.0, 0.0}},
+        {3,  {0.0, 0.0}},
+        {4,  {0.0, 0.0}},
+        {5,  {0.0, 0.0}},
+        {6,  {0.0, 0.0}},
+        {7,  {0.0, 0.0}},
+        {8,  {0.0, 0.0}},
+        {9,  {0.0, 0.0}},
+        {10, {0.0, 0.0}},
+        {11, {0.0, 0.0}},
+        {12, {0.0, 0.0}},
+        {13, {0.0, 0.0}},
+        {14, {0.0, 0.0}},
+        {15, {0.0, 0.0}},
+        {16, {0.0, 0.0}},
+        {17, {0.0, 0.0}},
+        {18, {0.0, 0.0}},
+        {19, {0.0, 0.0}},
+        {20, {0.0, 0.0}},
+        {21, {0.0, 0.0}},
+        {22, {0.0, 0.0}},
+        {23, {0.0, 0.0}},
+        {24, {0.0, 0.0}},
+        {25, {0.0, 0.0}},
+        {26, {0.0, 0.0}},
+        {27, {0.0, 0.0}},
+        {28, {0.0, 0.0}}};
+
+    // PFA2p
+    } else if (peak_finder_algorithm_ == 50) {
+    
+        // per-ieta weights when fixing w3 = w4 = 1.0 (2 PS)
+        weights_ =
+        {{1, {-0.09, -0.39}},
+         {2, {-0.09, -0.38}},
+         {3, {-0.10, -0.38}},
+         {4, {-0.13, -0.39}},
+         {5, {-0.09, -0.39}},
+         {6, {-0.10, -0.39}},
+         {7, {-0.08, -0.37}},
+         {8, {-0.09, -0.38}},
+         {9, {-0.11, -0.38}},
+         {10,{ -0.09, -0.40}},
+         {11,{ -0.12, -0.39}},
+         {12,{ -0.09, -0.39}},
+         {13,{ -0.11, -0.38}},
+         {14,{ -0.13, -0.40}},
+         {15,{ -0.13, -0.41}},
+         {16,{ -0.12, -0.40}},
+         {17,{ -0.07, -0.42}},
+         {18,{ -0.11, -0.40}},
+         {19,{ -0.11, -0.42}},
+         {20,{ -0.09, -0.43}},
+         {21,{ -0.18, -0.83}},
+         {22,{ -0.22, -0.85}},
+         {23,{ -0.24, -0.88}},
+         {24,{ -0.28, -0.91}},
+         {25,{ -0.32, -0.94}},
+         {26,{ -0.34, -0.96}},
+         {27,{ -0.34, -0.96}},
+         {28,{ -0.40, -1.04}}};
+
+    // PFA2p
+    } else if (peak_finder_algorithm_ == 55) {
+        // Average HBHE weights when fixing w3 = w4 = 1.0 
+        weights_ =
+        {{1, {-0.11,-0.39}},
+        {2,  {-0.11,-0.39}},
+        {3,  {-0.11,-0.39}},
+        {4,  {-0.11,-0.39}},
+        {5,  {-0.11,-0.39}},
+        {6,  {-0.11,-0.39}},
+        {7,  {-0.11,-0.39}},
+        {8,  {-0.11,-0.39}},
+        {9,  {-0.11,-0.39}},
+        {10, {-0.11,-0.39}},
+        {11, {-0.11,-0.39}},
+        {12, {-0.11,-0.39}},
+        {13, {-0.11,-0.39}},
+        {14, {-0.11,-0.39}},
+        {15, {-0.11,-0.39}},
+        {16, {-0.11,-0.39}},
+        {17, {-0.10,-0.42}},
+        {18, {-0.10,-0.42}},
+        {19, {-0.10,-0.42}},
+        {20, {-0.10,-0.42}},
+        {21, {-0.32,-0.95}},
+        {22, {-0.32,-0.95}},
+        {23, {-0.32,-0.95}},
+        {24, {-0.32,-0.95}},
+        {25, {-0.32,-0.95}},
+        {26, {-0.32,-0.95}},
+        {27, {-0.32,-0.95}},
+        {28, {-0.32,-0.95}}};
+
+    // PFA2p
+    } else if (peak_finder_algorithm_ == 54) {
+    
+        // per-ieta weights when fixing w3 = w4 = 1.0 (2 PS)
+        // SOI-1 > 3
+        weights_ =
+        {{1, {-0.00, -0.46}}, 
+         {2, {-0.00, -0.45}}, 
+         {3, {-0.00, -0.43}}, 
+         {4, {-0.00, -0.46}}, 
+         {5, {-0.00, -0.47}}, 
+         {6, {-0.00, -0.49}}, 
+         {7, {-0.00, -0.48}}, 
+         {8, {-0.00, -0.49}}, 
+         {9, {-0.00, -0.46}}, 
+         {10, {-0.00, -0.49}}, 
+         {11, {-0.00, -0.48}}, 
+         {12, {-0.00, -0.49}}, 
+         {13, {-0.00, -0.52}}, 
+         {14, {-0.00, -0.52}}, 
+         {15, {-0.00, -0.54}}, 
+         {16, {-0.00, -0.51}}, 
+         {17, {-0.00, -0.48}}, 
+         {18, {-0.00, -0.45}}, 
+         {19, {-0.00, -0.48}}, 
+         {20, {-0.00, -0.52}}, 
+         {21, {-0.00, -0.90}}, 
+         {22, {-0.01, -0.94}}, 
+         {23, {-0.02, -0.94}}, 
+         {24, {-0.05, -0.96}}, 
+         {25, {-0.16, -0.98}}, 
+         {26, {-0.24, -0.99}}, 
+         {27, {-0.20, -0.99}}, 
+         {28, {-0.39, -1.04}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 60) {
+        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
+        weights_ =
+        {{1, {-0.42}},
+        {2,  {-0.42}},
+        {3,  {-0.41}},
+        {4,  {-0.44}},
+        {5,  {-0.46}},
+        {6,  {-0.44}},
+        {7,  {-0.45}},
+        {8,  {-0.45}},
+        {9,  {-0.46}},
+        {10, {-0.45}},
+        {11, {-0.48}},
+        {12, {-0.47}},
+        {13, {-0.50}},
+        {14, {-0.51}},
+        {15, {-0.54}},
+        {16, {-0.54}},
+        {17, {-0.52}},
+        {18, {-0.53}},
+        {19, {-0.51}},
+        {20, {-0.52}},
+        {21, {-0.63}},
+        {22, {-0.69}},
+        {23, {-0.78}},
+        {24, {-0.89}},
+        {25, {-1.10}},
+        {26, {-1.27}},
+        {27, {-1.22}},
+        {28, {-1.75}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 61) {
+        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
+        // Require 3TS sum > 0.5 GeV
+        weights_ =
+        {{1, {0.0}},
+        {2,  {0.0}},
+        {3,  {0.0}},
+        {4,  {0.0}},
+        {5,  {0.0}},
+        {6,  {0.0}},
+        {7,  {0.0}},
+        {8,  {0.0}},
+        {9,  {0.0}},
+        {10, {0.0}},
+        {11, {0.0}},
+        {12, {0.0}},
+        {13, {0.0}},
+        {14, {0.0}},
+        {15, {0.0}},
+        {16, {0.0}},
+        {17, {0.0}},
+        {18, {0.0}},
+        {19, {0.0}},
+        {20, {0.0}},
+        {21, {-0.71}},
+        {22, {-0.82}},
+        {23, {-0.85}},
+        {24, {-0.93}},
+        {25, {-1.09}},
+        {26, {-1.34}},
+        {27, {-1.30}},
+        {28, {-1.95}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 62) {
+        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
+        // Require a 2TS peak at SOI
+        weights_ =
+        {{1, {0.0}},
+        {2,  {0.0}},
+        {3,  {0.0}},
+        {4,  {0.0}},
+        {5,  {0.0}},
+        {6,  {0.0}},
+        {7,  {0.0}},
+        {8,  {0.0}},
+        {9,  {0.0}},
+        {10, {0.0}},
+        {11, {0.0}},
+        {12, {0.0}},
+        {13, {0.0}},
+        {14, {0.0}},
+        {15, {0.0}},
+        {16, {0.0}},
+        {17, {0.0}},
+        {18, {0.0}},
+        {19, {0.0}},
+        {20, {0.0}},
+        {21, {-1.12}},
+        {22, {-1.26}},
+        {23, {-1.41}},
+        {24, {-1.60}},
+        {25, {-1.83}},
+        {26, {-2.10}},
+        {27, {-2.13}},
+        {28, {-2.55}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 63) {
+        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
+        // Require a 2TS peak at SOI and 3TS sum > 0.5 GeV
+        weights_ =
+        {{1, {0.0}},
+        {2,  {0.0}},
+        {3,  {0.0}},
+        {4,  {0.0}},
+        {5,  {0.0}},
+        {6,  {0.0}},
+        {7,  {0.0}},
+        {8,  {0.0}},
+        {9,  {0.0}},
+        {10, {0.0}},
+        {11, {0.0}},
+        {12, {0.0}},
+        {13, {0.0}},
+        {14, {0.0}},
+        {15, {0.0}},
+        {16, {0.0}},
+        {17, {0.0}},
+        {18, {0.0}},
+        {19, {0.0}},
+        {20, {0.0}},
+        {21, {-0.77}},
+        {22, {-0.87}},
+        {23, {-0.88}},
+        {24, {-0.95}},
+        {25, {-1.12}},
+        {26, {-1.38}},
+        {27, {-1.32}},
+        {28, {-2.06}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 64) {
+        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
+        // Require TS SOI-1 > 3 
+        weights_ =
+        {{1, {-0.33}},
+        {2,  {-0.32}},
+        {3,  {-0.30}},
+        {4,  {-0.33}},
+        {5,  {-0.35}},
+        {6,  {-0.33}},
+        {7,  {-0.34}},
+        {8,  {-0.33}},
+        {9,  {-0.33}},
+        {10, {-0.34}},
+        {11, {-0.33}},
+        {12, {-0.33}},
+        {13, {-0.34}},
+        {14, {-0.35}},
+        {15, {-0.38}},
+        {16, {-0.38}},
+        {17, {-0.39}},
+        {18, {-0.39}},
+        {19, {-0.37}},
+        {20, {-0.37}},
+        {21, {-0.50}},
+        {22, {-0.56}},
+        {23, {-0.65}},
+        {24, {-0.79}},
+        {25, {-1.02}},
+        {26, {-1.21}},
+        {27, {-1.13}},
+        {28, {-1.75}}};
+
+    // PFA3p
+    } else if (peak_finder_algorithm_ == 65) {
+        // Average weights when fixing w1 = w2 = 1 (1 PS)
+        weights_ =
+        {{1, {-0.48}},
+        {2,  {-0.48}},
+        {3,  {-0.48}},
+        {4,  {-0.48}},
+        {5,  {-0.48}},
+        {6,  {-0.48}},
+        {7,  {-0.48}},
+        {8,  {-0.48}},
+        {9,  {-0.48}},
+        {10, {-0.48}},
+        {11, {-0.48}},
+        {12, {-0.48}},
+        {13, {-0.48}},
+        {14, {-0.48}},
+        {15, {-0.48}},
+        {16, {-0.48}},
+        {17, {-0.52}},
+        {18, {-0.52}},
+        {19, {-0.52}},
+        {20, {-0.52}},
+        {21, {-1.19}},
+        {22, {-1.19}},
+        {23, {-1.19}},
+        {24, {-1.19}},
+        {25, {-1.19}},
+        {26, {-1.19}},
+        {27, {-1.19}},
+        {28, {-1.19}}};
+    }
 }
 
 void HcalTriggerPrimitiveAlgo::setNCTScaleShift(int shift){
