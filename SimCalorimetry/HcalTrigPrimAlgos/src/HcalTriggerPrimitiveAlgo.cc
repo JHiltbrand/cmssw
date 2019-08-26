@@ -661,6 +661,8 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
    int theIeta = detId.ietaAbs();
    int theIphi = detId.iphi();
    int shrink = numberOfSamples_ - 1;
+
+   // By default assume we do not weight and use presamples.
    unsigned int weightedPresamples = 0;
    if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
 
@@ -672,12 +674,6 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
        thesampledata[ibin] = samples[ibin];
    }
 
-   bool ifPrint = (theIeta == 85 && samples[3] > 10);
-
-   if (ifPrint) {
-       std::cout << "\nieta " << theIeta << " | iphi " << theIphi << " | 8TS [" << samples[0] << ", " << samples[1] << ", " << samples[2] << ", " << samples[3] << ", " << samples[4] << ", " << samples[5] << ", " << samples[6] << ", " << samples[7] << "]" << std::endl;
-
-    }
    double segmentationFactor = 1.0;
    if (ids.size() == 2) segmentationFactor = 0.5;
 

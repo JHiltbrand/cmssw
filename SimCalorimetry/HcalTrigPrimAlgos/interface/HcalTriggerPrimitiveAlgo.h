@@ -184,7 +184,7 @@ public:
   const HcalDbService* conditions_;
   double theThreshold;
   bool peakfind_;
-  std::map<int, std::vector<double> > weights_;
+  std::map<int, std::vector<double> > weights_; // Contains weights for _presamples_
   int latency_;
   uint32_t FG_threshold_;
   std::vector<uint32_t> FG_HF_thresholds_;
