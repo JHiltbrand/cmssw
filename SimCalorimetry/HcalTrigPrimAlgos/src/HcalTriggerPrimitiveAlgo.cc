@@ -689,11 +689,10 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
 
 	       if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
 
-           // Reserve PFA [50,60) for PFA2p algorithm and PFA [60,70) for PFA3p. Use unity weights for PFA2p,PFA3p here
 	       algosumvalue += int(sample * segmentationFactor);
 
        }
-       // For PFA2p use the presamples to get an additional factor to add to algosum
+       // Use the presamples to get an additional factor to add to algosum
        // Since we are in nested loop, add weighted presample to sum once when i == 0 only
        if (weightedPresamples == 2) {
 
@@ -774,7 +773,6 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
 	             auto algosumvalue = 0;
 	             for (int i = 0; i < tpSamples; ++i)
 	                 algosumvalue += int(theDepthMap[samples.id()][d][idx + i]);
-	                 //algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	             depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	         }
          }  
@@ -788,7 +786,6 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
 	             auto algosumvalue = 0;
 	             for (int i = 0; i < tpSamples; ++i)
 	                 algosumvalue += int(theDepthMap[samples.id()][d][idx + i]);
-	                 //algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * theWeights[i]);
 	             depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
 	         }
          }
