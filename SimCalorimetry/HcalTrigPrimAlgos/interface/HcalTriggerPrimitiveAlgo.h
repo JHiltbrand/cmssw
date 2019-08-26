@@ -81,7 +81,7 @@ class Sample {
 
 class HcalTriggerPrimitiveAlgo {
 public:
-  HcalTriggerPrimitiveAlgo(bool pf, const std::vector<double>& hbw, const std::vector<double>& he1w, const std::vector<double>& he2w, int latency,
+  HcalTriggerPrimitiveAlgo(bool pf, int latency,
                            uint32_t FG_threshold, const std::vector<uint32_t>& FG_HF_thresholds, uint32_t ZS_threshold,
                            int numberOfSamples,   int numberOfPresamples,
                            int numberOfSamplesHF, int numberOfPresamplesHF, bool useTDCInMinBiasBits,
@@ -125,6 +125,7 @@ public:
                         const HcalElectronicsMap* emap,
                         HcalTrigPrimDigiCollection & result);
   void setPeakFinderAlgorithm(int algo);
+  void setPeakFinderAlgorithm(std::string algo);
   void setNCTScaleShift(int);
   void setRCTScaleShift(int);
 
@@ -183,9 +184,6 @@ public:
   const HcalDbService* conditions_;
   double theThreshold;
   bool peakfind_;
-  std::vector<double> hbWeights_; // map ieta to 4 TS weights
-  std::vector<double> he1Weights_; // map ieta to 4 TS weights
-  std::vector<double> he2Weights_; // map ieta to 4 TS weights
   std::map<int, std::vector<double> > weights_;
   int latency_;
   uint32_t FG_threshold_;
@@ -208,6 +206,7 @@ public:
   // TSS[i] = TS[i] + TS[i+1]
   // Default: Algo2
   int peak_finder_algorithm_;
+  std::string peak_finder_algorithm_name_;
 
   // Member not initialzed
   //std::vector<HcalTrigTowerDetId> towerIds(const HcalDetId & id) const;

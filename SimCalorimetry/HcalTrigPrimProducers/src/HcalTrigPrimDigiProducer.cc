@@ -28,9 +28,6 @@
 HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
 : 
   theAlgo_(ps.getParameter<bool>("peakFilter"),
-        ps.getParameter<std::vector<double> >("hbWeights"),
-        ps.getParameter<std::vector<double> >("he1Weights"),
-        ps.getParameter<std::vector<double> >("he2Weights"),
         ps.getParameter<int>("latency"),
         ps.getParameter<uint32_t>("FG_threshold"),
 	ps.getParameter<std::vector<uint32_t> >("FG_HF_thresholds"),
@@ -89,6 +86,7 @@ HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
    produces<HcalTrigPrimDigiCollection>();
    produces<HcalUpgradeTrigPrimDigiCollection>();
    theAlgo_.setPeakFinderAlgorithm(ps.getParameter<int>("PeakFinderAlgorithm"));
+   theAlgo_.setPeakFinderAlgorithm(ps.getUntrackedParameter<std::string>("PeakFinderAlgorithmName"));
 
    edm::ParameterSet hfSS=ps.getParameter<edm::ParameterSet>("tpScales").getParameter<edm::ParameterSet>("HF");
 
