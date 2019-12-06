@@ -28,7 +28,9 @@
 HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
 : 
   theAlgo_(ps.getParameter<bool>("peakFilter"),
-        ps.getParameter<std::vector<double> >("weights"),
+        ps.getParameter<std::vector<double> >("weightsHB"),
+        ps.getParameter<std::vector<double> >("weightsHE1"),
+        ps.getParameter<std::vector<double> >("weightsHE2"),
         ps.getParameter<int>("latency"),
         ps.getParameter<uint32_t>("FG_threshold"),
 	ps.getParameter<std::vector<uint32_t> >("FG_HF_thresholds"),

@@ -284,16 +284,32 @@ void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples) {
 
 
 void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result) {
-   int shrink = weights_.size() - 1;
+
+   // weights vectors for HB, HE1 and HE2 are all same size
+   // let's use weightsHB to know number of timeslices in sum
+   unsigned int nTSinSum = weightsHB_.size();
+
+   int shrink = nTSinSum - 1;
    std::vector<bool>& msb = fgMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
+
+   // Get the |ieta| for current sample
+   HcalDetId detId(samples.id());
+   unsigned int theIeta = detId.ietaAbs();
+
+   double theWeight = 1.0;
 
    //slide algo window
    for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
       int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
+      for(unsigned int i = 0; i < nTSinSum; i++) {
          //add up value * scale factor
-         algosumvalue += int(samples[ibin+i] * weights_[i]);
+         // Based on the |ieta| of the sample, retrieve the correct region weight
+         if (theIeta <= 16) { theWeight = weightsHB_[i]; }
+         else if (theIeta > 16 && theIeta <= 20) { theWeight = weightsHE1_[i]; }
+         else if (theIeta > 20) { theWeight = weightsHE2_[i]; }
+
+         algosumvalue += int(samples[ibin+i] * theWeight);
       }
       if (algosumvalue<0) sum[ibin]=0;            // low-side
                                                   //high-side
@@ -392,7 +408,7 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
 
           // Usually use a segmentation factor of 1.0 but for ieta >= 21 use 0.5
           double segmentationFactor = 1.0;
-          if (ids.size() == 2) { segmentation = 0.5; } 
+          if (ids.size() == 2) { segmentationFactor = 0.5; } 
 
           // Based on the |ieta| of the sample, retrieve the correct region weight
           double theWeight = 1.0;
