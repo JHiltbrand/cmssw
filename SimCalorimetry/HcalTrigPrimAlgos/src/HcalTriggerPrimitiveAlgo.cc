@@ -20,14 +20,14 @@
 
 using namespace std;
 
-HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<double>& w, int latency,
+HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, const std::vector<double>& wHB, const std::vector<double>& wHE1, const std::vector<double>& wHE2, int latency,
                                                     uint32_t FG_threshold, const std::vector<uint32_t>& FG_HF_thresholds, uint32_t ZS_threshold,
                                                     int numberOfSamples, int numberOfPresamples,
                                                     int numberOfSamplesHF, int numberOfPresamplesHF, bool useTDCInMinBiasBits,
                                                     uint32_t minSignalThreshold, uint32_t PMT_NoiseThreshold
                                                     )
                                                    : incoder_(nullptr), outcoder_(nullptr),
-                                                   theThreshold(0), peakfind_(pf), weights_(w), latency_(latency),
+                                                   theThreshold(0), peakfind_(pf), weightsHB_(wHB), weightsHE1_(wHE1), weightsHE2_(wHE2), latency_(latency),
                                                    FG_threshold_(FG_threshold), FG_HF_thresholds_(FG_HF_thresholds), ZS_threshold_(ZS_threshold),
                                                    numberOfSamples_(numberOfSamples),
                                                    numberOfPresamples_(numberOfPresamples),
@@ -366,23 +366,41 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTrigger
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
-   int shrink = weights_.size() - 1;
+   // weights vectors for HB, HE1 and HE2 are all same size
+   // let's use weightsHB to know number of timeslices in sum
+   unsigned int nTSinSum = weightsHB_.size();
+
+   int shrink = nTSinSum - 1;
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
    HcalDetId detId(samples.id());
+
+   // Get the |ieta| for current sample
+   unsigned int theIeta = detId.ietaAbs();
+
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
    //slide algo window
-   for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
+   for(int ibin = 0; ibin < int(samples.size()) - shrink; ++ibin) {
       int algosumvalue = 0;
-      for(unsigned int i = 0; i < weights_.size(); i++) {
-	//add up value * scale factor
-	// In addition, divide by two in the 10 degree phi segmentation region
-	// to mimic 5 degree segmentation for the trigger
-	unsigned int sample = samples[ibin+i];
-	if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
-	if(ids.size()==2) algosumvalue += int(sample * 0.5 * weights_[i]);
-	else algosumvalue += int(sample * weights_[i]);
+      for(unsigned int i = 0; i < nTSinSum; i++) {
+	      //add up value * scale factor
+	      // In addition, divide by two in the 10 degree phi segmentation region
+	      // to mimic 5 degree segmentation for the trigger
+	      unsigned int sample = samples[ibin+i];
+	      if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+
+          // Usually use a segmentation factor of 1.0 but for ieta >= 21 use 0.5
+          double segmentationFactor = 1.0;
+          if (ids.size() == 2) { segmentation = 0.5; } 
+
+          // Based on the |ieta| of the sample, retrieve the correct region weight
+          double theWeight = 1.0;
+          if (theIeta <= 16) { theWeight = weightsHB_[i]; }
+          else if (theIeta > 16 && theIeta <= 20) { theWeight = weightsHE1_[i]; }
+          else if (theIeta > 20) { theWeight = weightsHE2_[i]; }
+
+	      algosumvalue += int(sample * segmentationFactor * theWeight);
       }
       if (algosumvalue<0) sum[ibin]=0;            // low-side
                                                   //high-side

@@ -15,7 +15,9 @@ Min_Long_Energy= cms.double(10),#makes a cut based on energy deposited in short 
 
 simHcalTriggerPrimitiveDigis = cms.EDProducer("HcalTrigPrimDigiProducer",
     peakFilter = cms.bool(True),
-    weights = cms.vdouble(1.0, 1.0), ##hardware algo        
+    weightsHB  = cms.vdouble(1.0, 1.0, 1.0), ##hardware algo        
+    weightsHE1 = cms.vdouble(1.0, 1.0, 1.0), ##hardware algo        
+    weightsHE2 = cms.vdouble(1.0, 1.0, 1.0), ##hardware algo        
     latency = cms.int32(1),
     FG_threshold = cms.uint32(12), ## threshold for setting fine grain bit
     FG_HF_thresholds = cms.vuint32(17, 255), ## thresholds for setting fine grain bit
