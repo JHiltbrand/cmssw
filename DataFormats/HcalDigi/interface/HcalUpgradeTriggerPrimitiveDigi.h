@@ -29,9 +29,17 @@ class HcalUpgradeTriggerPrimitiveDigi {
   // Set information.  MAXSAMPLES sets size limit.
   //------------------------------------------------------
 
-  void setDepthData ( std::vector<int> d ) { m_depth_data = d; };
+  void setDepthData ( std::vector<int>& d ) {
+      for (unsigned int i = 0; i < d.size(); i++) {
+          m_depth_data[i] = d[i];
+      }
+  }
 
-  void setSampleData ( std::vector<int> p) {m_sample_data = p; };
+  void setSampleData ( std::vector<int>& p ) {
+      for (unsigned int i = 0; i < p.size(); i++) {
+          m_sample_data[i] = p[i];
+      }
+  }
 
   void setTimingData (
 		      std::vector<double> rise_avg,
@@ -90,13 +98,13 @@ class HcalUpgradeTriggerPrimitiveDigi {
   int SOI_fineGrain      () const { return t0().fineGrain      (); }
   int SOI_compressedEt   () const { return t0().compressedEt   (); }
 
-  int SOI_depth_linear(int i) const { return m_depth_data[i - 1]; }
+  int SOI_depth_linear(int i) const { return m_depth_data[i]; }
 
-  double SOI_rising_avg(int i) const { return m_rising_avg[i - 1]; }
-  double SOI_rising_rms(int i) const { return m_rising_rms[i - 1]; }
-  double SOI_falling_avg(int i) const { return m_falling_avg[i - 1]; }
-  double SOI_falling_rms(int i) const { return m_falling_rms[i - 1]; }
-  int SOI_oot_linear(int i) const { return m_oot_data[i - 1]; }
+  double SOI_rising_avg(int i) const { return m_rising_avg[i]; }
+  double SOI_rising_rms(int i) const { return m_rising_rms[i]; }
+  double SOI_falling_avg(int i) const { return m_falling_avg[i]; }
+  double SOI_falling_rms(int i) const { return m_falling_rms[i]; }
+  int SOI_oot_linear(int i) const { return m_oot_data[i]; }
 
 
  private:
