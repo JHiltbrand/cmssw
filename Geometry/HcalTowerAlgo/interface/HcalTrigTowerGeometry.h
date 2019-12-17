@@ -13,7 +13,7 @@ public:
   HcalTrigTowerGeometry( const HcalTopology* topology );
 
   /// the mapping to and from DetIds
-  std::vector<HcalTrigTowerDetId> towerIds(const HcalDetId & cellId) const;
+  std::vector<HcalTrigTowerDetId> towerIds(const HcalDetId & cellId, unsigned int depth = 0) const;
   std::vector<HcalDetId> detIds(const HcalTrigTowerDetId &) const;
 
   int firstHFTower(int version) const {return (version==0)?(29):(30);} 
