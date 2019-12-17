@@ -306,6 +306,7 @@ void HcaluLUTTPGCoder::make_cosh_ieta_map(void) {
   // trigger tower 28 in HE has a more complicated geometry
   std::pair<double, double> eta28 = topo_->etaRange(HcalEndcap, 28);
   std::pair<double, double> eta29 = topo_->etaRange(HcalEndcap, 29);
+
   cosh_ieta_29_HE_ = cosh((eta29.first + eta29.second)/2.);
   cosh_ieta_28_HE_low_depths_ = cosh((eta28.first + eta28.second)/2.);
   // for higher depths in ieta = 28, the trigger tower extends past
@@ -403,7 +404,9 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
 
 	    int granularity = meta->getLutGranularity();
 
-	    double correctionPhaseNS = conditions.getHcalRecoParam(cell)->correctionPhaseNS();
+	    //double correctionPhaseNS = conditions.getHcalRecoParam(cell)->correctionPhaseNS();
+	    double correctionPhaseNS = 3.0;
+
 	    for (unsigned int adc = 0; adc < SIZE; ++adc) {
 		if (isMasked) lut[adc] = 0;
 		else {
@@ -413,11 +416,15 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
 		    // and containment corrections  were not
 		    // ET-dependent prior to 2018
 		    if(is2018OrLater) {
+
 		      double containmentCorrection1TS = pulseCorr_->correction(cell, 1, correctionPhaseNS, adc2fC(adc));
+            
 		      // Use the 1-TS containment correction to estimate the charge of the pulse
 		      // from the individual samples
 		      double correctedCharge = containmentCorrection1TS*adc2fC(adc);
+
 		      containmentCorrection2TSCorrected = pulseCorr_->correction(cell, 2, correctionPhaseNS, correctedCharge);
+
 		      if(qieType==QIE11) {
 			const HcalSiPMParameter& siPMParameter(*conditions.getHcalSiPMParameter(cell));
 			HcalSiPMnonlinearity corr(conditions.getHcalSiPMCharacteristics()->getNonLinearities(siPMParameter.getType()));
