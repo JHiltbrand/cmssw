@@ -125,7 +125,7 @@ public:
                         const HcalElectronicsMap* emap,
                         HcalTrigPrimDigiCollection & result);
   void setPeakFinderAlgorithm(int algo);
-  void setPeakFinderAlgorithm(std::string algo);
+  void setPeakFinderAlgorithmWeights(const edm::ParameterSet& weights);
   void setNCTScaleShift(int);
   void setRCTScaleShift(int);
 
@@ -184,7 +184,7 @@ public:
   const HcalDbService* conditions_;
   double theThreshold;
   bool peakfind_;
-  std::map<int, std::vector<double> > weights_; // Contains weights for _presamples_
+  std::map<unsigned int, std::vector<double> > weights_; // Contains weights for _presamples_
   int latency_;
   uint32_t FG_threshold_;
   std::vector<uint32_t> FG_HF_thresholds_;
@@ -206,7 +206,6 @@ public:
   // TSS[i] = TS[i] + TS[i+1]
   // Default: Algo2
   int peak_finder_algorithm_;
-  std::string peak_finder_algorithm_name_;
 
   // Member not initialzed
   //std::vector<HcalTrigTowerDetId> towerIds(const HcalDetId & id) const;

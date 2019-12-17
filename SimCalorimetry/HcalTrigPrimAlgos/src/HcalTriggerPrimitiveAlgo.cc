@@ -145,7 +145,6 @@ HcalTriggerPrimitiveAlgo::HcalTriggerPrimitiveAlgo( bool pf, int latency,
                                                    NCTScaleShift(0), RCTScaleShift(0),
                                                    upgrade_(upgrade),  
                                                    peak_finder_algorithm_(2),
-                                                   peak_finder_algorithm_name_("PFA2p"),
                                                    override_parameters_()
 {
    //No peak finding setting (for Fastsim)
@@ -353,7 +352,12 @@ HcalTriggerPrimitiveAlgo::addSignal(const QIE11DataFrame& frame)
    // prevent QIE11 calibration channels from entering TP emulation
    if(detId.subdet() != HcalEndcap && detId.subdet() != HcalBarrel) return;
 
+   //if ((detId.ieta() == 15 || detId.ieta() == 14) && detId.depth() == 4)
+   //     std::cout << "FOR DETID: " << detId << " SAMPLES ARE: [" << frame[0].adc() << ", " << frame[1].adc() << ", " << frame[2].adc() << ", " << frame[3].adc() << ", " << frame[4].adc() << ", " << frame[5].adc() << ", " << frame[6].adc() << ", " << frame[7].adc() << "]" << std::endl;
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
+
+    //std::cout << "HcalDetId: " << detId << std::endl;
+
    assert(ids.size() == 1 || ids.size() == 2);
    IntegerCaloSamples samples1(ids[0], int(frame.samples()));
 
@@ -383,6 +387,9 @@ HcalTriggerPrimitiveAlgo::addSignal(const QIE11DataFrame& frame)
 //void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples) {
 void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples, int depth, const std::pair<double, double>& tdc) {
    HcalTrigTowerDetId id(samples.id());
+    //if (abs(id.ieta()) < 30) { 
+    //    std::cout << " TT = " << id.ieta() << std::endl;
+    //}
    SumMap::iterator itr = theSumMap.find(id);
    if(itr == theSumMap.end()) {
       theSumMap.insert(std::make_pair(id, samples));
@@ -478,115 +485,191 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTrigger
 }
 
 void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgradeTriggerPrimitiveDigi & result) {
-   int shrink = numberOfSamples_ - 1;
-   std::vector<bool>& msb = fgMap_[samples.id()];
-   IntegerCaloSamples sum(samples.id(), samples.size());
 
-   //slide algo window
-   for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
-      int algosumvalue = 0;
-      for(int i = 0; i < numberOfSamples_; i++) {
-         //add up value * scale factor
-         algosumvalue += int(samples[ibin+i]);
-      }
-      if (algosumvalue<0) sum[ibin]=0;            // low-side
-                                                  //high-side
-      //else if (algosumvalue>QIE8_LINEARIZATION_ET) sum[ibin]=QIE8_LINEARIZATION_ET;
-      else sum[ibin] = algosumvalue;              //assign value to sum[]
-   }
+    std::vector<bool>& msb = fgMap_[samples.id()];
+    IntegerCaloSamples sum(samples.id(), samples.size());
 
-   // Align digis and TP
-   int dgPresamples=samples.presamples(); 
-   int tpPresamples=numberOfPresamples_;
-   int shift = dgPresamples - tpPresamples;
-   int dgSamples=samples.size();
-   int tpSamples=numberOfSamples_;
-   if(peakfind_){
-       if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
-	    edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
-		"TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
-	    shift=shrink;
-	    tpPresamples=dgPresamples-shrink;
-	    tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift;
-       }
-   }
+    HcalDetId detId(samples.id());
+    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
-   std::vector<int> finegrain(tpSamples,false);
+    int theIeta = detId.ietaAbs();
+    int theIphi = detId.iphi();
 
-   IntegerCaloSamples output(samples.id(), tpSamples);
-   output.setPresamples(tpPresamples);
+    int depth = detId.depth();
+    int shrink = numberOfSamples_ - 1;
+
+    // By default assume we do not weight and use presamples.
+    unsigned int weightedPresamples = 0;
+    if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
+
+    // Fixed point, scale factor of 10
+    uint32_t segmentationFactor = 10;
+    if (ids.size() == 2) segmentationFactor = 5;
+
+    //slide algo window
+    for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
+        int32_t algosumvalue = 0;
+        for(int i = 0; i < numberOfSamples_; i++) {
+
+            //add up value * scale factor
+            // In addition, divide by two in the 10 degree phi segmentation region
+            // to mimic 5 degree segmentation for the trigger
+            uint32_t sample = samples[ibin+i]; //samples[ibin+i];
+
+            if(sample>QIE8_LINEARIZATION_ET) sample = QIE8_LINEARIZATION_ET;
+
+            algosumvalue += 100 * sample * segmentationFactor;
+
+        }
+        // Use the presamples to get an additional factor to add to algosum
+        // Since we are in nested loop, add weighted presample to sum once when i == 0 only
+        if (weightedPresamples == 2) {
+
+            // Convert weights to fixed point, scale factor of 100
+            int32_t wSOI_1 = 100 * weights_[theIeta][1];
+            int32_t wSOI_2 = 100 * weights_[theIeta][0];
+
+            if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
+            if (ibin >= 2) {algosumvalue += samples[ibin-2] * segmentationFactor * wSOI_2;}
+        }
+
+        else if (weightedPresamples == 1) {
+
+            // Convert weights to fixed point, scale factor of 100
+            int32_t wSOI_1 = 100 * weights_[theIeta][0];
+
+            if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
+        }
+
+        if (algosumvalue<0) {
+            sum[ibin]=0;            // low-side
+        } else {
+            sum[ibin] = algosumvalue;              //assign value to sum[]
+        }
+    }
+
+    // Align digis and TP
+    int dgPresamples=samples.presamples(); 
+    int tpPresamples=numberOfPresamples_;
+    int shift = dgPresamples - tpPresamples;
+    int dgSamples=samples.size();
+    int tpSamples=numberOfSamples_;
+
+    //if(peakfind_){
+    //    if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
+    //     edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
+    // 	"TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
+    //     shift=shrink;
+    //     tpPresamples=dgPresamples-shrink;
+    //     tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift;
+    //    }
+    //}
+
+    std::vector<int> finegrain(tpSamples,false);
+
+    IntegerCaloSamples output(samples.id(), tpSamples);
+    output.setPresamples(tpPresamples);
 
     std::vector<int> depth_sums(3, 0);
-   
-   for (int ibin = 0; ibin < tpSamples; ++ibin) {
-      // ibin - index for output TP
-      // idx - index for samples + shift
-      int idx = ibin + shift;
+    
+    for (int ibin = 0; ibin < tpSamples; ++ibin) {
 
-      //Peak finding
-      if (peakfind_) {
-         bool isPeak = false;
-         switch (peak_finder_algorithm_) {
-            case 1 :
-               isPeak = (samples[idx] > samples[idx-1] && samples[idx] >= samples[idx+1] && samples[idx] > theThreshold);
-               break;
-            case 2:
-               isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
-               break;
-            default:
-               break;
-         }
+        // ibin - index for output TP
+        // idx - index for samples + shift
+        int idx = ibin + shift;
 
-         if (isPeak){
-            output[ibin] = std::min<unsigned int>(sum[idx],QIE8_LINEARIZATION_ET);
-            finegrain[ibin] = msb[idx];
+        bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
 
-	    // Only provide depth information for the SOI.  This is the
+        if (isPeak){
+            output[ibin] = std::min<unsigned int>(sum[idx] / 1000, QIE8_LINEARIZATION_ET);
+
+            // Only provide depth information for the SOI.  This is the
             // energy value used downstream, even if the peak is found for
             // another sample.
             if (ibin == numberOfPresamples_) {
-               for (int d = 0; d < 3; ++d) {
-                  auto algosumvalue = 0;
-                  for (int i = 0; i < tpSamples; ++i)
-                   algosumvalue   += int(theDepthMap[samples.id()][d][idx + i]);
-                  depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE8_LINEARIZATION_ET);
-               }
+                for (int d = 0; d < 3; ++d) {
+
+                    int32_t algosumvalue = 0;
+                    for (int i = 0; i < tpSamples; ++i) {
+                        
+                        // To add weight samples later we need the same fixed point scale factor applied
+                        algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i] * segmentationFactor;
+                    }
+
+                    if (weightedPresamples == 2) {
+
+                        // Convert weights to fixed point, scale factor of 100
+                        int32_t wSOI_1 = 100 * weights_[theIeta][1];
+                        int32_t wSOI_2 = 100 * weights_[theIeta][0];
+
+                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                        if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
+                    }
+
+                    else if (weightedPresamples == 1) {
+
+                        // Convert weights to fixed point, scale factor of 100
+                        int32_t wSOI_1 = 100 * weights_[theIeta][0];
+
+                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                    }
+
+                    if (algosumvalue < 0) algosumvalue = 0;
+
+                    depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE8_LINEARIZATION_ET);
+                }
+            }  
+        } else {
+            // Not a peak
+            output[ibin] = 0;
+            
+            // See comment above.
+            if (ibin == numberOfPresamples_) {
+                for (int d = 0; d < 3; ++d) {
+
+                    int32_t algosumvalue = 0;
+                    for (int i = 0; i < tpSamples; ++i) {
+
+                        // To add weighted samples later we need the same fixed point scale factor applied
+                        algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
+                    }
+
+                    if (weightedPresamples == 2) {
+
+                        // Convert weights to fixed point, scale factor of 100
+                        int32_t wSOI_1 = 100 * weights_[theIeta][1];
+                        int32_t wSOI_2 = 100 * weights_[theIeta][0];
+
+                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                        if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
+                    }
+
+                    else if (weightedPresamples == 1) {
+
+                        // Convert weights to fixed point, scale factor of 100
+                        int32_t wSOI_1 = 100 * weights_[theIeta][0];
+
+                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                    }
+
+                    if (algosumvalue < 0) algosumvalue = 0;
+
+                    // Remove the fixed point scale factor to get to the correct range
+                    depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE8_LINEARIZATION_ET);
+                }
             }
-	    
-         }
-         // Not a peak
-         else output[ibin] = 0;
-      }
-      else { // No peak finding, just output running sum
-         output[ibin] = std::min<unsigned int>(sum[idx],QIE8_LINEARIZATION_ET);
-         finegrain[ibin] = msb[idx];
+        }
+    }
+    outcoder_->compress(output, finegrain, result);
 
-	  // See comment above.
-         if (ibin == numberOfPresamples_) {
-            for (int d = 0; d < 3; ++d) {
-               auto algosumvalue = 0;
-               for (int i = 0; i < tpSamples; ++i)
-                  algosumvalue += int(theDepthMap[samples.id()][d][idx + i]);
-               depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE8_LINEARIZATION_ET);
-            }
-         }
-      }
-
-      // Only Pegged for 1-TS algo.
-      if (peak_finder_algorithm_ == 1) {
-         if (samples[idx] >= QIE8_LINEARIZATION_ET)
-            output[ibin] = QIE8_LINEARIZATION_ET;
-      }
-   }
-   outcoder_->compress(output, finegrain, result);
-
-   update_legacy(result, theDepthMap[samples.id()], numberOfPresamples_);
+    update_legacy(result, theDepthMap[samples.id()], numberOfPresamples_);
 }
 
 
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
+
    int shrink = numberOfSamples_ - 1;
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
@@ -652,150 +735,218 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
 void
 HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
-   auto& msb = fgUpgradeMap_[samples.id()];
-   IntegerCaloSamples sum(samples.id(), samples.size());
+    auto& msb = fgUpgradeMap_[samples.id()];
+    IntegerCaloSamples sum(samples.id(), samples.size());
 
-   HcalDetId detId(samples.id());
-   std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
+    HcalDetId detId(samples.id());
+    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
-   int theIeta = detId.ietaAbs();
-   int theIphi = detId.iphi();
-   int shrink = numberOfSamples_ - 1;
+    int theIeta = detId.ietaAbs();
+    int theIphi = detId.iphi();
 
-   // By default assume we do not weight and use presamples.
-   unsigned int weightedPresamples = 0;
-   if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
+    int depth = detId.depth();
+    int shrink = numberOfSamples_ - 1;
 
-   // store individual sample data
-   // std::map<int, std::vector<int>> thesampledata; //first=ibin, second=sample
-   // Save the 8TS digi as the TP for weight studies
-   std::vector<int> thesampledata(8, 0);
-   for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
-       thesampledata[ibin] = samples[ibin];
-   }
+    // By default assume we do not weight and use presamples.
+    unsigned int weightedPresamples = 0;
+    if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
 
-   double segmentationFactor = 1.0;
-   if (ids.size() == 2) segmentationFactor = 0.5;
+    // store individual sample data
+    // std::map<int, std::vector<int>> thesampledata; //first=ibin, second=sample
+    // Save the 8TS digi as the TP for weight studies
+    std::vector<int> thesampledata(8, 0);
+    for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
+        thesampledata[ibin] = samples[ibin];
+    }
 
-   //slide algo window
-   for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
-       int algosumvalue = 0;
-       for(int i = 0; i < numberOfSamples_; i++) {
-	       //add up value * scale factor
-	       // In addition, divide by two in the 10 degree phi segmentation region
-	       // to mimic 5 degree segmentation for the trigger
-	       unsigned int sample = samples[ibin+i]; //samples[ibin+i];
-	       //	printf("ibin= %d and i=%d, so ibin+i=%d and sample[ibin+i]=%u\n",ibin,i,ibin+i,sample);    
+    // Fixed point integer, scale factor of 10
+    uint32_t segmentationFactor = 10;
+    if (ids.size() == 2) segmentationFactor = 5;
+    
+    //std::cout << std::endl; std::cout << std::endl;
+    //std::cout << "ieta: " << theIeta << " sample: " << samples[0] << ", " << samples[1] << ", " << samples[2] << ", " << samples[3] << ", " << samples[4] << ", " << samples[5] << ", " << samples[6] << ", " << samples[7] << std::endl; 
+    //slide algo window
+    for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
 
-	       if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+        //std::cout << std::endl;
+        int32_t algosumvalue = 0;
 
-	       algosumvalue += int(sample * segmentationFactor);
+        for(int i = 0; i < numberOfSamples_; i++) {
 
-       }
-       // Use the presamples to get an additional factor to add to algosum
-       // Since we are in nested loop, add weighted presample to sum once when i == 0 only
-       if (weightedPresamples == 2) {
+            //add up value * scale factor
+            // In addition, divide by two in the 10 degree phi segmentation region
+            // to mimic 5 degree segmentation for the trigger
+            uint32_t sample = samples[ibin+i];
 
-           int presamplevalue = 0;
+            if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
 
-           if (ibin >= 1) {presamplevalue += int(samples[ibin-1] * segmentationFactor * weights_[theIeta][1]);}
-           if (ibin >= 2) {presamplevalue += int(samples[ibin-2] * segmentationFactor * weights_[theIeta][0]);}
-           
-           algosumvalue += presamplevalue;
-       }
+            // We need a total fixed point scale factor of 1000 to match with the presamples. We get 10 from the segmentation factor
+            // So multiply by another 100 
+            algosumvalue += 100 * sample * segmentationFactor;
+            //std::cout << "algosumvalue is: " << algosumvalue << std::endl;
 
-       else if (weightedPresamples == 1) {
+        }
+        // Use the presamples to get an additional factor to add to algosum
+        // Since we are in nested loop, add weighted presample to sum once when i == 0 only
+        if (weightedPresamples == 2) {
 
-           int presamplevalue = 0;
+            // Fixed point, scale factor 100
+            int32_t wSOI_1 = 100 * weights_[theIeta][1];
+            int32_t wSOI_2 = 100 * weights_[theIeta][0];
 
-           if (ibin >= 1) {presamplevalue += int(samples[ibin-1] * segmentationFactor * weights_[theIeta][0]);}
+            //std::cout << "Fixed point wSOI_1 = " << wSOI_1 << std::endl;
+            //std::cout << "Fixed point wSOI_2 = " << wSOI_2 << std::endl;
 
-           algosumvalue += presamplevalue; 
-   
-       }
-       if (algosumvalue<0) {
-	       sum[ibin]=0;            // low-side
-       //} else if (algosumvalue>QIE11_LINEARIZATION_ET) { sum[ibin]=QIE11_LINEARIZATION_ET;
-       } else {
-	       sum[ibin] = algosumvalue;              //assign value to sum[]
-       }
-   }
+            //std::cout << "Now we add " << samples[ibin-1] << " * " << segmentationFactor << " * " << wSOI_1 << " to algosumvalue" << std::endl;
 
-   // Align digis and TP
-   int dgPresamples=samples.presamples(); //3
-   int tpPresamples=numberOfPresamples_;//2
-   int shift = dgPresamples - tpPresamples; // shift=1 and shrink=4weights-1 = 3
-   int dgSamples=samples.size(); //8
-   int tpSamples=numberOfSamples_; //4
+            //std::cout << "algosumvalue before subtraction: " << algosumvalue << std::endl;
+            if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
+            if (ibin >= 2) {algosumvalue += samples[ibin-2] * segmentationFactor * wSOI_2;}
+        }
 
-   // vector data to store per sample info for reconstructing pulse shape
-   //   std::vector<int> sampledata = {0,0,0,0};
-   // vector data to store the depth info for the SOI sample only
-   std::vector<int> depth_sums(8, 0);
-   
-   // To include or not to include, that is the question
-   //if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
-   //  edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
-   //    "TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
-   //  //  shift=shrink; // shift=3
-   //  tpPresamples=dgPresamples-shrink;// =0
-   //  tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift; //8-2-3-1=2
-   //}
-   std::vector<int> finegrain(tpSamples,false);
-
-   IntegerCaloSamples output(samples.id(), tpSamples);
-   output.setPresamples(tpPresamples);
-
-   for (int ibin = 0; ibin < tpSamples; ++ibin) {
-      // ibin - index for output TP
-      // idx - index for samples + shift
-     int idx = ibin + shift;
-
-     bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
-
-     if (isPeak){
-         output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
-
-         //       printf("++++++++InPeak, sum is=%u\n",sum[idx]);
-         /*
-         std::map<int, std::vector<int>>::iterator it;
-         for ( it = thesampledata.begin(); it != thesampledata.end(); it++ ){
-	 if  ((it->first)==idx) {
-	     sampledata=it->second;
-	 }
-         }
-         */
-         // Only provide depth information for the SOI.  This is the
-         // energy value used downstream, even if the peak is found for
-         // another sample.
-         if (ibin == numberOfPresamples_) {
-	         for (int d = 0; d < 8; ++d) {
-	             auto algosumvalue = 0;
-	             for (int i = 0; i < tpSamples; ++i)
-	                 algosumvalue += int(theDepthMap[samples.id()][d][idx + i]);
-	             depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
-	         }
-         }  
-     } else {
-         // Not a peak
-         output[ibin] = 0;
+        else if (weightedPresamples == 1) {
          
-         // See comment above.
-         if (ibin == numberOfPresamples_) {
-	         for (int d = 0; d < 8; ++d) {
-	             auto algosumvalue = 0;
-	             for (int i = 0; i < tpSamples; ++i)
-	                 algosumvalue += int(theDepthMap[samples.id()][d][idx + i]);
-	             depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
-	         }
-         }
-     }
-     // peak-finding is not applied for FG bits
-     finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
-   }
+            // Fixed point, scale factor 100
+            int32_t wSOI_1 = 100 * weights_[theIeta][0];
 
-   outcoder_->compress(output, finegrain, result);
-   update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata); 
+            //std::cout << "algosumvalue before subtraction: " << algosumvalue << std::endl;
+
+            if (ibin >= 1) {
+                algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;
+                //std::cout << "Going to subtract " << samples[ibin-1] << " * " << segmentationFactor << " * " << wSOI_1 << std::endl;
+            }
+
+            //std::cout << "algosumvalue after subtraction: " << algosumvalue << std::endl;
+        }
+
+        if (algosumvalue<0) {
+            sum[ibin] = 0;            // low-side
+        } else {
+            sum[ibin] = algosumvalue;              //assign value to sum[]
+        }
+    }
+
+    // Align digis and TP
+    int dgPresamples=samples.presamples(); //3
+    int tpPresamples=numberOfPresamples_;//2
+    int shift = dgPresamples - tpPresamples; // shift=1 and shrink=4weights-1 = 3
+    int dgSamples=samples.size(); //8
+    int tpSamples=numberOfSamples_; //4
+
+    // vector data to store per sample info for reconstructing pulse shape
+    //   std::vector<int> sampledata = {0,0,0,0};
+    // vector data to store the depth info for the SOI sample only
+    std::vector<int> depth_sums(8, 0);
+    
+    // To include or not to include, that " count: " << count << is the question
+    //if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
+    //  edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
+    //    "TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
+    //  //  shift=shrink; // shift=3
+    //  tpPresamples=dgPresamples-shrink;// =0
+    //  tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift; //8-2-3-1=2
+    //}
+    std::vector<int> finegrain(tpSamples,false);
+
+    IntegerCaloSamples output(samples.id(), tpSamples);
+    output.setPresamples(tpPresamples);
+
+    //std::cout << "sum: " << sum[0] << ", " << sum[1] << ", " << sum[2] << ", " << sum[3] << ", " << sum[4] << ", " << sum[5] << ", " << sum[6] << ", " << sum[7] << std::endl; 
+
+    for (int ibin = 0; ibin < tpSamples; ++ibin) {
+       // ibin - index for output TP
+       // idx - index for samples + shift
+      int idx = ibin + shift;
+
+      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
+
+      if (isPeak){
+         
+          // Throw the decimal digits aways by dividing out the scale factor
+          output[ibin] = std::min<unsigned int>(sum[idx] / 1000, QIE11_MAX_LINEARIZATION_ET);
+        
+          //std::cout << "Peak with unscaled value: " << output[ibin] << std::endl;
+
+          // Only provide depth information for the SOI.  This is the
+          // energy value used downstream, even if the peak is found for
+          // another sample.
+          if (ibin == numberOfPresamples_) {
+              for (int d = 0; d < 8; ++d) {
+
+                  int32_t algosumvalue = 0;
+
+                  for (int i = 0; i < tpSamples; ++i) {
+     	             algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
+                  }
+
+                  if (weightedPresamples == 2) {
+
+                      // Fixed point, scale factor 100
+                      int32_t wSOI_1 = 100 * weights_[theIeta][1];
+                      int32_t wSOI_2 = 100 * weights_[theIeta][0];
+
+                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                      if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
+                  }
+
+                  else if (weightedPresamples == 1) {
+
+                      // Fixed point, scale factor 100
+                      int32_t wSOI_1 = 100 * weights_[theIeta][0];
+
+                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                  }
+
+                  if (algosumvalue < 0) algosumvalue = 0;
+
+                  // Remove the scale factor (10 from segmentation factor and 100 from sample
+                  depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE11_MAX_LINEARIZATION_ET);
+              }
+          }  
+      } else {
+          // Not a peak
+          output[ibin] = 0;
+          
+          // See comment above.
+          if (ibin == numberOfPresamples_) {
+              for (int d = 0; d < 8; ++d) {
+
+                  int32_t algosumvalue = 0;
+                  for (int i = 0; i < tpSamples; ++i) {
+                      algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
+                  }
+
+                  if (weightedPresamples == 2) {
+
+                      // Fixed point, scale factor 100
+                      int32_t wSOI_1 = 100 * weights_[theIeta][1];
+                      int32_t wSOI_2 = 100 * weights_[theIeta][0];
+
+                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                      if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
+                  }
+
+                  else if (weightedPresamples == 1) {
+
+                      // Fixed point, scale factor 100
+                      int32_t wSOI_1 = 100 * weights_[theIeta][0];
+
+                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
+                  }
+
+                  if (algosumvalue < 0) algosumvalue = 0;
+
+                  // Remove the fixed point scale factor (10 from segmentation factor and 100 from sample)
+                  depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE11_MAX_LINEARIZATION_ET);
+              }
+          }
+      }
+      // peak-finding is not applied for FG bits
+      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
+    }
+
+    outcoder_->compress(output, finegrain, result);
+    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata); 
 }
 
 void HcalTriggerPrimitiveAlgo::analyzeHF(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result, const int hf_lumi_shift) {
@@ -1273,233 +1424,11 @@ void HcalTriggerPrimitiveAlgo::setPeakFinderAlgorithm(int algo){
    peak_finder_algorithm_ = algo;
 }
 
-void HcalTriggerPrimitiveAlgo::setPeakFinderAlgorithm(std::string algo) {
+void HcalTriggerPrimitiveAlgo::setPeakFinderAlgorithmWeights(const edm::ParameterSet& weights) {
 
-    peak_finder_algorithm_name_ = algo;
-    if (peak_finder_algorithm_name_ == "PFA1p_AVE") {
-        // average weights when fixing w3 = 1 (1 PS) 
-        weights_ =
-        {{1, {-0.42}},
-        {2,  {-0.42}},
-        {3,  {-0.42}},
-        {4,  {-0.42}},
-        {5,  {-0.42}},
-        {6,  {-0.42}},
-        {7,  {-0.42}},
-        {8,  {-0.42}},
-        {9,  {-0.42}},
-        {10, {-0.42}},
-        {11, {-0.42}},
-        {12, {-0.42}},
-        {13, {-0.42}},
-        {14, {-0.42}},
-        {15, {-0.42}},
-        {16, {-0.42}},
-        {17, {-0.45}},
-        {18, {-0.45}},
-        {19, {-0.45}},
-        {20, {-0.45}},
-        {21, {-0.83}},
-        {22, {-0.83}},
-        {23, {-0.83}},
-        {24, {-0.83}},
-        {25, {-0.83}},
-        {26, {-0.83}},
-        {27, {-0.83}},
-        {28, {-0.83}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA1pp_AVE") {
-        // per-eta weights when fixing w3 = 1 (2 PS) 
-        weights_ =
-        {{1, {0.21,-0.61}},
-        {2,  {0.21,-0.61}},
-        {3,  {0.21,-0.61}},
-        {4,  {0.21,-0.61}},
-        {5,  {0.21,-0.61}},
-        {6,  {0.21,-0.61}},
-        {7,  {0.21,-0.61}},
-        {8,  {0.21,-0.61}},
-        {9,  {0.21,-0.61}},
-        {10, {0.21,-0.61}},
-        {11, {0.21,-0.61}},
-        {12, {0.21,-0.61}},
-        {13, {0.21,-0.61}},
-        {14, {0.21,-0.61}},
-        {15, {0.21,-0.61}},
-        {16, {0.21,-0.61}},
-        {17, {0.20,-0.59}},
-        {18, {0.20,-0.59}},
-        {19, {0.20,-0.59}},
-        {20, {0.20,-0.59}},
-        {21, {-0.07,-0.56}},
-        {22, {-0.07,-0.56}},
-        {23, {-0.07,-0.56}},
-        {24, {-0.07,-0.56}},
-        {25, {-0.07,-0.56}},
-        {26, {-0.07,-0.56}},
-        {27, {-0.07,-0.56}},
-        {28, {-0.07,-0.56}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA2p") {
-    
-        // per-ieta weights when fixing w3 = w4 = 1.0 (2 PS)
-        weights_ =
-        {{1, {-0.09, -0.39}},
-         {2, {-0.09, -0.38}},
-         {3, {-0.10, -0.38}},
-         {4, {-0.13, -0.39}},
-         {5, {-0.09, -0.39}},
-         {6, {-0.10, -0.39}},
-         {7, {-0.08, -0.37}},
-         {8, {-0.09, -0.38}},
-         {9, {-0.11, -0.38}},
-         {10,{ -0.09, -0.40}},
-         {11,{ -0.12, -0.39}},
-         {12,{ -0.09, -0.39}},
-         {13,{ -0.11, -0.38}},
-         {14,{ -0.13, -0.40}},
-         {15,{ -0.13, -0.41}},
-         {16,{ -0.12, -0.40}},
-         {17,{ -0.07, -0.42}},
-         {18,{ -0.11, -0.40}},
-         {19,{ -0.11, -0.42}},
-         {20,{ -0.09, -0.43}},
-         {21,{ -0.18, -0.83}},
-         {22,{ -0.22, -0.85}},
-         {23,{ -0.24, -0.88}},
-         {24,{ -0.28, -0.91}},
-         {25,{ -0.32, -0.94}},
-         {26,{ -0.34, -0.96}},
-         {27,{ -0.34, -0.96}},
-         {28,{ -0.40, -1.04}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA2p_AVE") {
-        // Average HBHE weights when fixing w3 = w4 = 1.0 
-        weights_ =
-        {{1, {-0.11,-0.39}},
-        {2,  {-0.11,-0.39}},
-        {3,  {-0.11,-0.39}},
-        {4,  {-0.11,-0.39}},
-        {5,  {-0.11,-0.39}},
-        {6,  {-0.11,-0.39}},
-        {7,  {-0.11,-0.39}},
-        {8,  {-0.11,-0.39}},
-        {9,  {-0.11,-0.39}},
-        {10, {-0.11,-0.39}},
-        {11, {-0.11,-0.39}},
-        {12, {-0.11,-0.39}},
-        {13, {-0.11,-0.39}},
-        {14, {-0.11,-0.39}},
-        {15, {-0.11,-0.39}},
-        {16, {-0.11,-0.39}},
-        {17, {-0.10,-0.42}},
-        {18, {-0.10,-0.42}},
-        {19, {-0.10,-0.42}},
-        {20, {-0.10,-0.42}},
-        {21, {-0.32,-0.95}},
-        {22, {-0.32,-0.95}},
-        {23, {-0.32,-0.95}},
-        {24, {-0.32,-0.95}},
-        {25, {-0.32,-0.95}},
-        {26, {-0.32,-0.95}},
-        {27, {-0.32,-0.95}},
-        {28, {-0.32,-0.95}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA3") {
-        // HBHE weights when fixing w3 = w4 = 1.0 
-        weights_ =
-        {{1, {-2.0}},
-        {2,  {-2.0}},
-        {3,  {-2.0}},
-        {4,  {-2.0}},
-        {5,  {-2.0}},
-        {6,  {-2.0}},
-        {7,  {-2.0}},
-        {8,  {-2.0}},
-        {9,  {-2.0}},
-        {10, {-2.0}},
-        {11, {-2.0}},
-        {12, {-2.0}},
-        {13, {-2.0}},
-        {14, {-2.0}},
-        {15, {-2.0}},
-        {16, {-2.0}},
-        {17, {-2.0}},
-        {18, {-2.0}},
-        {19, {-2.0}},
-        {20, {-2.0}},
-        {21, {-2.0}},
-        {22, {-2.0}},
-        {23, {-2.0}},
-        {24, {-2.0}},
-        {25, {-2.0}},
-        {26, {-2.0}},
-        {27, {-2.0}},
-        {28, {-2.0}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA3p") {
-        // per-ieta weights when fixing w1 = w2 = 1 (1 PS)
-        weights_ =
-        {{1, {-0.42}},
-        {2,  {-0.42}},
-        {3,  {-0.41}},
-        {4,  {-0.44}},
-        {5,  {-0.46}},
-        {6,  {-0.44}},
-        {7,  {-0.45}},
-        {8,  {-0.45}},
-        {9,  {-0.46}},
-        {10, {-0.45}},
-        {11, {-0.48}},
-        {12, {-0.47}},
-        {13, {-0.50}},
-        {14, {-0.51}},
-        {15, {-0.54}},
-        {16, {-0.54}},
-        {17, {-0.52}},
-        {18, {-0.53}},
-        {19, {-0.51}},
-        {20, {-0.52}},
-        {21, {-0.63}},
-        {22, {-0.69}},
-        {23, {-0.78}},
-        {24, {-0.89}},
-        {25, {-1.10}},
-        {26, {-1.27}},
-        {27, {-1.22}},
-        {28, {-1.75}}};
-
-    } else if (peak_finder_algorithm_name_ == "PFA3p_AVE") {
-        // Average weights when fixing w1 = w2 = 1 (1 PS)
-        weights_ =
-        {{1, {-0.48}},
-        {2,  {-0.48}},
-        {3,  {-0.48}},
-        {4,  {-0.48}},
-        {5,  {-0.48}},
-        {6,  {-0.48}},
-        {7,  {-0.48}},
-        {8,  {-0.48}},
-        {9,  {-0.48}},
-        {10, {-0.48}},
-        {11, {-0.48}},
-        {12, {-0.48}},
-        {13, {-0.48}},
-        {14, {-0.48}},
-        {15, {-0.48}},
-        {16, {-0.48}},
-        {17, {-0.52}},
-        {18, {-0.52}},
-        {19, {-0.52}},
-        {20, {-0.52}},
-        {21, {-1.19}},
-        {22, {-1.19}},
-        {23, {-1.19}},
-        {24, {-1.19}},
-        {25, {-1.19}},
-        {26, {-1.19}},
-        {27, {-1.19}},
-        {28, {-1.19}}};
+    for (unsigned int ietaAbs = 1; ietaAbs < 29; ietaAbs++) {
+        std::vector<double> ietaWeights = weights.getUntrackedParameter<std::vector<double>>(std::to_string(ietaAbs));
+        weights_[ietaAbs] = ietaWeights;
     }
 }
 
