@@ -345,7 +345,10 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalTrigger
       int idx = ibin + shift - tpPresamples;
 
       // When idx is <= 0 peakfind would compare out-of-bounds of the vector
-      if (idx <= 0) { output[ibin] = 0; }
+      if (idx <= 0) {
+         output[ibin] = 0;
+         continue;
+      }
 
       //Peak finding
       if (peakfind_) {
@@ -453,10 +456,14 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
       // idx - index for samples + shift - tpPresamples
       // Subtract tpPresamples one more time to get SOI in the right position
       int idx = ibin + shift - tpPresamples;
-      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
 
       // When idx is <= 0 peakfind would compare out-of-bounds of the vector. Avoid this ambiguity
-      if (idx <= 0) { output[ibin] = 0; }
+      if (idx <= 0) {
+         output[ibin] = 0;
+         continue;
+      }
+
+      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
 
       if (isPeak){
          output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
