@@ -24,9 +24,9 @@ class IntegerCaloSamples;
 
 class HcalTriggerPrimitiveAlgo {
 public:
-  HcalTriggerPrimitiveAlgo(bool pf, const std::vector<double>& wHB, const std::vector<double>& wHE1, const std::vector<double>& wHE2, int latency,
+  HcalTriggerPrimitiveAlgo(bool pf, const std::vector<double>& w, const std::vector<double>& wQIE11HB, const std::vector<double>& wQIE11HE1, const std::vector<double>& wQIE11HE2, int latency,
                            uint32_t FG_threshold, const std::vector<uint32_t>& FG_HF_thresholds, uint32_t ZS_threshold,
-                           int numberOfSamples,   int numberOfPresamples,
+                           int numberOfSamples,   int numberOfPresamples, int numberOfSamplesQIE11, int numberOfPresamplesQIE11,
                            int numberOfSamplesHF, int numberOfPresamplesHF, bool useTDCInMinBiasBits,
                            uint32_t minSignalThreshold=0, uint32_t PMT_NoiseThreshold=0);
   ~HcalTriggerPrimitiveAlgo();
@@ -115,9 +115,10 @@ public:
   const HcalDbService* conditions_;
   double theThreshold;
   bool peakfind_;
-  std::vector<double> weightsHB_;
-  std::vector<double> weightsHE1_;
-  std::vector<double> weightsHE2_;
+  std::vector<double> weights_;
+  std::vector<double> weightsQIE11HB_;
+  std::vector<double> weightsQIE11HE1_;
+  std::vector<double> weightsQIE11HE2_;
   int latency_;
   uint32_t FG_threshold_;
   std::vector<uint32_t> FG_HF_thresholds_;
@@ -125,6 +126,8 @@ public:
   int ZS_threshold_I_;
   int numberOfSamples_;
   int numberOfPresamples_;
+  int numberOfSamplesQIE11_;
+  int numberOfPresamplesQIE11_;
   int numberOfSamplesHF_;
   int numberOfPresamplesHF_;
   bool useTDCInMinBiasBits_;
