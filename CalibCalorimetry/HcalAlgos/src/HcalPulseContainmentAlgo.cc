@@ -67,16 +67,15 @@ HcalPulseContainmentAlgo::init(int num_samples)
 std::pair<double,double> 
 HcalPulseContainmentAlgo::calcpair(double truefc)
 {
+ 
   double timeslew_ns = hcalTimeSlew_delay_->delay(std::max(0.0,(double)truefc), HcalTimeSlew::Medium);
 
   double shift_ns  = fixedphasens_ - time0shiftns_ + timeslew_ns;
-  //std::cout << "SHIFT " << fixedphasens_ << " " << time0shiftns_ << " " << timeslew_ns << std::endl;
   double tmin      = -shift_ns;
   double tmax      = tmin+integrationwindowns_;
 
   //double integral  = shape_.integrate( tmin, tmax );
   double integral = integrator_(tmin, tmax);
-  //std::cout << "INTEGRAL " << integral << " " << truefc << " " << tmin << " "  << tmax << std::endl;
   double corfactor = 1.0/integral;
   double recofc    = (double)truefc * integral;
 
