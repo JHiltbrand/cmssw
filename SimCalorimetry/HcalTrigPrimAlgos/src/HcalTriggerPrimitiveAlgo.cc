@@ -62,7 +62,7 @@ timing(const QIE11DataFrame& frame) {
 }
 
 void
-update(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int soi, std::vector<int> lineardepthdata, std::vector<int> linearized)
+update(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int soi, std::vector<int>& lineardepthdata, std::vector<int>& linearized, std::vector<int>& peaks)
 {
 
   //   std::vector<int> linearized;
@@ -107,21 +107,21 @@ update(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int soi, std
 
   digi.setSampleData(linearized);
 
+  digi.setPeakData(peaks);
+
   digi.setOOTData(oot);
   digi.setTimingData(rise_avg, rise_rms, fall_avg, fall_rms);
 }
 
 void
-update_legacy(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int soi)
+update_legacy(HcalUpgradeTriggerPrimitiveDigi& digi, const Sample& sample, int soi, std::vector<int>& lineardepthdata, std::vector<int>& linearized, std::vector<int>& peaks)
 {
 
-  std::vector<int> linearized;
+  digi.setDepthData(lineardepthdata);
 
-  for (int i = 0; i < 3; ++i) {
-    linearized.push_back(sample[i][soi]);
-  }
+  digi.setSampleData(linearized);
 
-  digi.setDepthData(linearized);
+  digi.setPeakData(peaks);
 
 }
 
@@ -348,15 +348,12 @@ HcalTriggerPrimitiveAlgo::addSignal(const QIE11DataFrame& frame)
 {
    HcalDetId detId(frame.id());
 
-   int depth = HcalDetId(frame.id()).depth();
+   int depth = detId.depth();
    // prevent QIE11 calibration channels from entering TP emulation
    if(detId.subdet() != HcalEndcap && detId.subdet() != HcalBarrel) return;
 
-   //if ((detId.ieta() == 15 || detId.ieta() == 14) && detId.depth() == 4)
-   //     std::cout << "FOR DETID: " << detId << " SAMPLES ARE: [" << frame[0].adc() << ", " << frame[1].adc() << ", " << frame[2].adc() << ", " << frame[3].adc() << ", " << frame[4].adc() << ", " << frame[5].adc() << ", " << frame[6].adc() << ", " << frame[7].adc() << "]" << std::endl;
+   // DEPTH: Add depth as second argument
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
-
-    //std::cout << "HcalDetId: " << detId << std::endl;
 
    assert(ids.size() == 1 || ids.size() == 2);
    IntegerCaloSamples samples1(ids[0], int(frame.samples()));
@@ -387,9 +384,6 @@ HcalTriggerPrimitiveAlgo::addSignal(const QIE11DataFrame& frame)
 //void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples) {
 void HcalTriggerPrimitiveAlgo::addSignal(const IntegerCaloSamples & samples, int depth, const std::pair<double, double>& tdc) {
    HcalTrigTowerDetId id(samples.id());
-    //if (abs(id.ieta()) < 30) { 
-    //    std::cout << " TT = " << id.ieta() << std::endl;
-    //}
    SumMap::iterator itr = theSumMap.find(id);
    if(itr == theSumMap.end()) {
       theSumMap.insert(std::make_pair(id, samples));
@@ -493,18 +487,23 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
     std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
     int theIeta = detId.ietaAbs();
-    int theIphi = detId.iphi();
-
     int depth = detId.depth();
     int shrink = numberOfSamples_ - 1;
+
+    // store individual sample data
+    // Save the 8TS digi as the TP for weight studies
+    std::vector<int> thesampledata(8, 0);
+    for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
+        thesampledata[ibin] = samples[ibin];
+    }
 
     // By default assume we do not weight and use presamples.
     unsigned int weightedPresamples = 0;
     if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
 
     // Fixed point, scale factor of 10
-    uint32_t segmentationFactor = 10;
-    if (ids.size() == 2) segmentationFactor = 5;
+    double segmentationFactor = 1.0;
+    if (ids.size() == 2) segmentationFactor = 0.5;
 
     //slide algo window
     for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
@@ -518,7 +517,7 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
 
             if(sample>QIE8_LINEARIZATION_ET) sample = QIE8_LINEARIZATION_ET;
 
-            algosumvalue += 100 * sample * segmentationFactor;
+            algosumvalue += int(sample * segmentationFactor);
 
         }
         // Use the presamples to get an additional factor to add to algosum
@@ -526,19 +525,19 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
         if (weightedPresamples == 2) {
 
             // Convert weights to fixed point, scale factor of 100
-            int32_t wSOI_1 = 100 * weights_[theIeta][1];
-            int32_t wSOI_2 = 100 * weights_[theIeta][0];
+            double wSOI_1 = weights_[theIeta][1];
+            double wSOI_2 = weights_[theIeta][0];
 
-            if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
-            if (ibin >= 2) {algosumvalue += samples[ibin-2] * segmentationFactor * wSOI_2;}
+            if (ibin >= 1) {algosumvalue += int(samples[ibin-1] * segmentationFactor * wSOI_1);}
+            if (ibin >= 2) {algosumvalue += int(samples[ibin-2] * segmentationFactor * wSOI_2);}
         }
 
         else if (weightedPresamples == 1) {
 
             // Convert weights to fixed point, scale factor of 100
-            int32_t wSOI_1 = 100 * weights_[theIeta][0];
+            double wSOI_1 = weights_[theIeta][0];
 
-            if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
+            if (ibin >= 1) {algosumvalue += int(samples[ibin-1] * segmentationFactor * wSOI_1);}
         }
 
         if (algosumvalue<0) {
@@ -571,6 +570,8 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
     output.setPresamples(tpPresamples);
 
     std::vector<int> depth_sums(3, 0);
+
+    std::vector<int> peaks(tpSamples, 0);
     
     for (int ibin = 0; ibin < tpSamples; ++ibin) {
 
@@ -578,91 +579,51 @@ void HcalTriggerPrimitiveAlgo::analyze(IntegerCaloSamples & samples, HcalUpgrade
         // idx - index for samples + shift
         int idx = ibin + shift;
 
-        bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
+        int isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold) ? 1 : 0;
 
-        if (isPeak){
-            output[ibin] = std::min<unsigned int>(sum[idx] / 1000, QIE8_LINEARIZATION_ET);
+        peaks[ibin] = isPeak;
+        output[ibin] = std::min<unsigned int>(sum[idx], QIE8_LINEARIZATION_ET);
 
-            // Only provide depth information for the SOI.  This is the
-            // energy value used downstream, even if the peak is found for
-            // another sample.
-            if (ibin == numberOfPresamples_) {
-                for (int d = 0; d < 3; ++d) {
+        // Only provide depth information for the SOI.  This is the
+        // energy value used downstream, even if the peak is found for
+        // another sample.
+        if (ibin == numberOfPresamples_) {
+            for (int d = 0; d < 3; ++d) {
 
-                    int32_t algosumvalue = 0;
-                    for (int i = 0; i < tpSamples; ++i) {
-                        
-                        // To add weight samples later we need the same fixed point scale factor applied
-                        algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i] * segmentationFactor;
-                    }
-
-                    if (weightedPresamples == 2) {
-
-                        // Convert weights to fixed point, scale factor of 100
-                        int32_t wSOI_1 = 100 * weights_[theIeta][1];
-                        int32_t wSOI_2 = 100 * weights_[theIeta][0];
-
-                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                        if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
-                    }
-
-                    else if (weightedPresamples == 1) {
-
-                        // Convert weights to fixed point, scale factor of 100
-                        int32_t wSOI_1 = 100 * weights_[theIeta][0];
-
-                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                    }
-
-                    if (algosumvalue < 0) algosumvalue = 0;
-
-                    depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE8_LINEARIZATION_ET);
+                int32_t algosumvalue = 0;
+                for (int i = 0; i < tpSamples; ++i) {
+                    
+                    // To add weight samples later we need the same fixed point scale factor applied
+                    algosumvalue += int(theDepthMap[samples.id()][d][idx + i] * segmentationFactor);
                 }
-            }  
-        } else {
-            // Not a peak
-            output[ibin] = 0;
-            
-            // See comment above.
-            if (ibin == numberOfPresamples_) {
-                for (int d = 0; d < 3; ++d) {
 
-                    int32_t algosumvalue = 0;
-                    for (int i = 0; i < tpSamples; ++i) {
+                if (weightedPresamples == 2) {
 
-                        // To add weighted samples later we need the same fixed point scale factor applied
-                        algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
-                    }
+                    // Convert weights to fixed point, scale factor of 100
+                    double wSOI_1 = weights_[theIeta][1];
+                    double wSOI_2 = weights_[theIeta][0];
 
-                    if (weightedPresamples == 2) {
-
-                        // Convert weights to fixed point, scale factor of 100
-                        int32_t wSOI_1 = 100 * weights_[theIeta][1];
-                        int32_t wSOI_2 = 100 * weights_[theIeta][0];
-
-                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                        if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
-                    }
-
-                    else if (weightedPresamples == 1) {
-
-                        // Convert weights to fixed point, scale factor of 100
-                        int32_t wSOI_1 = 100 * weights_[theIeta][0];
-
-                        if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                    }
-
-                    if (algosumvalue < 0) algosumvalue = 0;
-
-                    // Remove the fixed point scale factor to get to the correct range
-                    depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE8_LINEARIZATION_ET);
+                    if (idx >= 1) {algosumvalue += int(theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1);}
+                    if (idx >= 2) {algosumvalue += int(theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2);}
                 }
+
+                else if (weightedPresamples == 1) {
+
+                    // Convert weights to fixed point, scale factor of 100
+                    double wSOI_1 = weights_[theIeta][0];
+
+                    if (idx >= 1) {algosumvalue += int(theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1);}
+                }
+
+                if (algosumvalue < 0) algosumvalue = 0;
+
+                depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE8_LINEARIZATION_ET);
             }
-        }
+        }  
     }
     outcoder_->compress(output, finegrain, result);
 
-    update_legacy(result, theDepthMap[samples.id()], numberOfPresamples_);
+    update_legacy(result, theDepthMap[samples.id()], numberOfPresamples_, depth_sums, thesampledata, peaks);
 }
 
 
@@ -733,7 +694,73 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerP
 }
 
 void
-HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
+HcalTriggerPrimitiveAlgo::analyzeQIE11_hw(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
+{
+
+   int shrink = numberOfSamples_ - 1;
+   auto& msb = fgUpgradeMap_[samples.id()];
+   IntegerCaloSamples sum(samples.id(), samples.size());
+
+   HcalDetId detId(samples.id());
+   std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
+   //slide algo window
+   for(int ibin = 0; ibin < int(samples.size())- shrink; ++ibin) {
+      int algosumvalue = 0;
+      for(int i = 0; i < numberOfSamples_; i++) {
+	//add up value * scale factor
+	// In addition, divide by two in the 10 degree phi segmentation region
+	// to mimic 5 degree segmentation for the trigger
+	unsigned int sample = samples[ibin+i];
+	if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+	if(ids.size()==2) algosumvalue += int(sample * 0.5);
+	else algosumvalue += int(sample);
+      }
+      if (algosumvalue<0) sum[ibin]=0;            // low-side
+                                                  //high-side
+      //else if (algosumvalue>QIE11_LINEARIZATION_ET) sum[ibin]=QIE11_LINEARIZATION_ET;
+      else sum[ibin] = algosumvalue;              //assign value to sum[]
+   }
+
+   // Align digis and TP
+   int dgPresamples=samples.presamples(); 
+   int tpPresamples=numberOfPresamples_;
+   int shift = dgPresamples - tpPresamples;
+   int dgSamples=samples.size();
+   int tpSamples=numberOfSamples_;
+
+   if((shift<shrink) || (shift + tpSamples + shrink > dgSamples - (peak_finder_algorithm_ - 1) )   ){
+      edm::LogInfo("HcalTriggerPrimitiveAlgo::analyze") << 
+         "TP presample or size from the configuration file is out of the accessible range. Using digi values from data instead...";
+      shift=shrink;
+      tpPresamples=dgPresamples-shrink;
+      tpSamples=dgSamples-(peak_finder_algorithm_-1)-shrink-shift;
+   }
+
+   std::vector<int> finegrain(tpSamples,false);
+
+   IntegerCaloSamples output(samples.id(), tpSamples);
+   output.setPresamples(tpPresamples);
+
+   for (int ibin = 0; ibin < tpSamples; ++ibin) {
+      // ibin - index for output TP
+      // idx - index for samples + shift
+      int idx = ibin + shift;
+      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
+
+      if (isPeak){
+         output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
+      } else {
+         // Not a peak
+         output[ibin] = 0;
+      }
+      // peak-finding is not applied for FG bits
+      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
+   }
+   outcoder_->compress(output, finegrain, result);
+}
+
+void
+HcalTriggerPrimitiveAlgo::analyzeQIE11_hw(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
 {
     auto& msb = fgUpgradeMap_[samples.id()];
     IntegerCaloSamples sum(samples.id(), samples.size());
@@ -742,17 +769,21 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
     std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
 
     int theIeta = detId.ietaAbs();
-    int theIphi = detId.iphi();
-
     int depth = detId.depth();
     int shrink = numberOfSamples_ - 1;
+
+    int32_t weightFixedPointSF = 256;
+    int32_t wSOI_1; 
+    int32_t wSOI_2; 
+
+    int32_t segFixedPointSF = 10;
+    int32_t segmentationFactor;
 
     // By default assume we do not weight and use presamples.
     unsigned int weightedPresamples = 0;
     if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
 
     // store individual sample data
-    // std::map<int, std::vector<int>> thesampledata; //first=ibin, second=sample
     // Save the 8TS digi as the TP for weight studies
     std::vector<int> thesampledata(8, 0);
     for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
@@ -760,30 +791,25 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
     }
 
     // Fixed point integer, scale factor of 10
-    uint32_t segmentationFactor = 10;
-    if (ids.size() == 2) segmentationFactor = 5;
+    segmentationFactor = 1;//1.0 * segFixedPointSF;
+    //if (ids.size() == 2) segmentationFactor = 0.5 * segFixedPointSF;
     
-    //std::cout << std::endl; std::cout << std::endl;
-    //std::cout << "ieta: " << theIeta << " sample: " << samples[0] << ", " << samples[1] << ", " << samples[2] << ", " << samples[3] << ", " << samples[4] << ", " << samples[5] << ", " << samples[6] << ", " << samples[7] << std::endl; 
     //slide algo window
     for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
 
-        //std::cout << std::endl;
         int32_t algosumvalue = 0;
-
         for(int i = 0; i < numberOfSamples_; i++) {
 
             //add up value * scale factor
             // In addition, divide by two in the 10 degree phi segmentation region
             // to mimic 5 degree segmentation for the trigger
+            
             uint32_t sample = samples[ibin+i];
-
             if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
 
             // We need a total fixed point scale factor of 1000 to match with the presamples. We get 10 from the segmentation factor
             // So multiply by another 100 
-            algosumvalue += 100 * sample * segmentationFactor;
-            //std::cout << "algosumvalue is: " << algosumvalue << std::endl;
+            algosumvalue += weightFixedPointSF * sample * segmentationFactor;
 
         }
         // Use the presamples to get an additional factor to add to algosum
@@ -791,13 +817,8 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
         if (weightedPresamples == 2) {
 
             // Fixed point, scale factor 100
-            int32_t wSOI_1 = 100 * weights_[theIeta][1];
-            int32_t wSOI_2 = 100 * weights_[theIeta][0];
-
-            //std::cout << "Fixed point wSOI_1 = " << wSOI_1 << std::endl;
-            //std::cout << "Fixed point wSOI_2 = " << wSOI_2 << std::endl;
-
-            //std::cout << "Now we add " << samples[ibin-1] << " * " << segmentationFactor << " * " << wSOI_1 << " to algosumvalue" << std::endl;
+            wSOI_1 = weightFixedPointSF * weights_[theIeta][1];
+            wSOI_2 = weightFixedPointSF * weights_[theIeta][0];
 
             //std::cout << "algosumvalue before subtraction: " << algosumvalue << std::endl;
             if (ibin >= 1) {algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;}
@@ -807,16 +828,132 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
         else if (weightedPresamples == 1) {
          
             // Fixed point, scale factor 100
-            int32_t wSOI_1 = 100 * weights_[theIeta][0];
-
-            //std::cout << "algosumvalue before subtraction: " << algosumvalue << std::endl;
+            wSOI_1 = weightFixedPointSF * weights_[theIeta][0];
 
             if (ibin >= 1) {
                 algosumvalue += samples[ibin-1] * segmentationFactor * wSOI_1;
-                //std::cout << "Going to subtract " << samples[ibin-1] << " * " << segmentationFactor << " * " << wSOI_1 << std::endl;
             }
+        }
 
-            //std::cout << "algosumvalue after subtraction: " << algosumvalue << std::endl;
+        if (algosumvalue<0) {
+            sum[ibin] = 0;            // low-side
+        } else {
+            sum[ibin] = algosumvalue>>8;              //assign value to sum[]
+        }
+    }
+
+    // Align digis and TP
+    int dgPresamples=samples.presamples(); //3
+    int tpPresamples=numberOfPresamples_;//2
+    int shift = dgPresamples - tpPresamples; // shift=1 and shrink=4weights-1 = 3
+    int dgSamples=samples.size(); //8
+    int tpSamples=numberOfSamples_; //4
+
+    // vector data to store per sample info for reconstructing pulse shape
+    //   std::vector<int> sampledata = {0,0,0,0};
+    // vector data to store the depth info for the SOI sample only
+    std::vector<int> depth_sums(8, 0);
+    std::vector<int> finegrain(tpSamples,false);
+
+    std::vector<int> peaks(tpSamples, 0);
+
+    IntegerCaloSamples output(samples.id(), tpSamples);
+    output.setPresamples(tpPresamples);
+
+    //for (int ibin = 1; ibin < 7; ++ibin) {
+    for (int ibin = 0; ibin < tpSamples; ++ibin) {
+       // ibin - index for output TP
+       // idx - index for samples + shift
+      int idx = ibin + shift;
+      //int idx = ibin;
+
+      int isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold) ? 1 : 0;
+
+      peaks[ibin] = isPeak;
+      output[ibin] = std::min<unsigned int>(sum[idx], QIE11_MAX_LINEARIZATION_ET);
+
+      // peak-finding is not applied for FG bits
+      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
+    }
+
+//    if (samples[0]+samples[1]+samples[2]+samples[3]+samples[4]+samples[5]+samples[6]+samples[7] > 50 && theIeta > 0) {
+//        for (int i = 0; i < 8; i++) {
+//            if (i == 0 || i == 7) { printf("%3i, %4i, %4i, %4i\n", theIeta, samples[i], sum[i], -1); }
+//            else { printf("%3i, %4i, %4i, %4i\n", theIeta, samples[i], sum[i], peak[i]); }
+//        }
+//    }
+
+    outcoder_->compress(output, finegrain, result);
+    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata, peaks); 
+}
+
+
+void
+HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo)
+{
+    auto& msb = fgUpgradeMap_[samples.id()];
+    IntegerCaloSamples sum(samples.id(), samples.size());
+
+    HcalDetId detId(samples.id());
+    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
+
+    int theIeta = detId.ietaAbs();
+    int depth = detId.depth();
+    int shrink = numberOfSamples_ - 1;
+
+    double wSOI_1; 
+    double wSOI_2; 
+
+    double segmentationFactor;
+
+    // By default assume we do not weight and use presamples.
+    unsigned int weightedPresamples = 0;
+    if (!weights_.empty()) { weightedPresamples = (weights_.begin()->second).size(); }
+
+    // store individual sample data
+    // Save the 8TS digi as the TP for weight studies
+    std::vector<int> thesampledata(8, 0);
+    for(int ibin = 0; ibin < int(samples.size()); ++ibin) {
+        thesampledata[ibin] = samples[ibin];
+    }
+
+    segmentationFactor = 1.0;
+    if (ids.size() == 2) segmentationFactor = 0.5;
+    
+    //slide algo window
+    for(int ibin = 0; ibin < int(samples.size()-shrink); ++ibin) {
+
+        int32_t algosumvalue = 0;
+        for(int i = 0; i < numberOfSamples_; i++) {
+
+            //add up value * scale factor
+            // In addition, divide by two in the 10 degree phi segmentation region
+            // to mimic 5 degree segmentation for the trigger
+            
+            uint32_t sample = samples[ibin+i];
+            if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+
+            algosumvalue += int(sample * segmentationFactor);
+
+        }
+        // Use the presamples to get an additional factor to add to algosum
+        // Since we are in nested loop, add weighted presample to sum once when i == 0 only
+        if (weightedPresamples == 2) {
+
+            wSOI_1 = weights_[theIeta][1];
+            wSOI_2 = weights_[theIeta][0];
+
+            if (ibin >= 1) {algosumvalue += int(samples[ibin-1] * segmentationFactor * wSOI_1);}
+            if (ibin >= 2) {algosumvalue += int(samples[ibin-2] * segmentationFactor * wSOI_2);}
+        }
+
+        else if (weightedPresamples == 1) {
+         
+            wSOI_1 = weights_[theIeta][0];
+
+            if (ibin >= 1) {
+                algosumvalue += int(samples[ibin-1] * segmentationFactor * wSOI_1);
+            }
         }
 
         if (algosumvalue<0) {
@@ -851,102 +988,60 @@ HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeT
     IntegerCaloSamples output(samples.id(), tpSamples);
     output.setPresamples(tpPresamples);
 
-    //std::cout << "sum: " << sum[0] << ", " << sum[1] << ", " << sum[2] << ", " << sum[3] << ", " << sum[4] << ", " << sum[5] << ", " << sum[6] << ", " << sum[7] << std::endl; 
+    std::vector<int> peaks(tpSamples, 0);
 
     for (int ibin = 0; ibin < tpSamples; ++ibin) {
+    //for (int ibin = 1; ibin < 7; ++ibin) {
        // ibin - index for output TP
        // idx - index for samples + shift
       int idx = ibin + shift;
+      //int idx = ibin;
 
-      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
+      int isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold) ? 1 : 0;
 
-      if (isPeak){
-         
-          // Throw the decimal digits aways by dividing out the scale factor
-          output[ibin] = std::min<unsigned int>(sum[idx] / 1000, QIE11_MAX_LINEARIZATION_ET);
-        
-          //std::cout << "Peak with unscaled value: " << output[ibin] << std::endl;
+      output[ibin] = std::min<unsigned int>(sum[idx], QIE11_MAX_LINEARIZATION_ET);
+      peaks[ibin] = isPeak;
 
-          // Only provide depth information for the SOI.  This is the
-          // energy value used downstream, even if the peak is found for
-          // another sample.
-          if (ibin == numberOfPresamples_) {
-              for (int d = 0; d < 8; ++d) {
+      // Only provide depth information for the SOI.  This is the
+      // energy value used downstream, even if the peak is found for
+      // another sample.
+      if (ibin == numberOfPresamples_) {
+          for (int d = 0; d < 8; ++d) {
 
-                  int32_t algosumvalue = 0;
+              int32_t algosumvalue = 0;
 
-                  for (int i = 0; i < tpSamples; ++i) {
-     	             algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
-                  }
-
-                  if (weightedPresamples == 2) {
-
-                      // Fixed point, scale factor 100
-                      int32_t wSOI_1 = 100 * weights_[theIeta][1];
-                      int32_t wSOI_2 = 100 * weights_[theIeta][0];
-
-                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                      if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
-                  }
-
-                  else if (weightedPresamples == 1) {
-
-                      // Fixed point, scale factor 100
-                      int32_t wSOI_1 = 100 * weights_[theIeta][0];
-
-                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                  }
-
-                  if (algosumvalue < 0) algosumvalue = 0;
-
-                  // Remove the scale factor (10 from segmentation factor and 100 from sample
-                  depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE11_MAX_LINEARIZATION_ET);
+              for (int i = 0; i < tpSamples; ++i) {
+                 algosumvalue += theDepthMap[samples.id()][d][idx + i];
               }
-          }  
-      } else {
-          // Not a peak
-          output[ibin] = 0;
-          
-          // See comment above.
-          if (ibin == numberOfPresamples_) {
-              for (int d = 0; d < 8; ++d) {
 
-                  int32_t algosumvalue = 0;
-                  for (int i = 0; i < tpSamples; ++i) {
-                      algosumvalue += 100 * theDepthMap[samples.id()][d][idx + i];
-                  }
+              if (weightedPresamples == 2) {
 
-                  if (weightedPresamples == 2) {
+                  wSOI_1 = weights_[theIeta][1];
+                  wSOI_2 = weights_[theIeta][0];
 
-                      // Fixed point, scale factor 100
-                      int32_t wSOI_1 = 100 * weights_[theIeta][1];
-                      int32_t wSOI_2 = 100 * weights_[theIeta][0];
-
-                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                      if (idx >= 2) {algosumvalue += theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2;}
-                  }
-
-                  else if (weightedPresamples == 1) {
-
-                      // Fixed point, scale factor 100
-                      int32_t wSOI_1 = 100 * weights_[theIeta][0];
-
-                      if (idx >= 1) {algosumvalue += theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1;}
-                  }
-
-                  if (algosumvalue < 0) algosumvalue = 0;
-
-                  // Remove the fixed point scale factor (10 from segmentation factor and 100 from sample)
-                  depth_sums[d] += std::min<unsigned int>(algosumvalue / 1000, QIE11_MAX_LINEARIZATION_ET);
+                  if (idx >= 1) {algosumvalue += int(theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1);}
+                  if (idx >= 2) {algosumvalue += int(theDepthMap[samples.id()][d][idx-2] * segmentationFactor * wSOI_2);}
               }
+
+              else if (weightedPresamples == 1) {
+
+                  wSOI_1 = weights_[theIeta][0];
+
+                  if (idx >= 1) {algosumvalue += int(theDepthMap[samples.id()][d][idx-1] * segmentationFactor * wSOI_1);}
+              }
+
+              if (algosumvalue < 0) algosumvalue = 0;
+
+              depth_sums[d] += std::min<unsigned int>(algosumvalue, QIE11_MAX_LINEARIZATION_ET);
           }
-      }
+      }  
+
       // peak-finding is not applied for FG bits
       finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
     }
 
     outcoder_->compress(output, finegrain, result);
-    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata); 
+    update(result, theDepthMap[samples.id()], numberOfPresamples_,depth_sums, thesampledata, peaks); 
 }
 
 void HcalTriggerPrimitiveAlgo::analyzeHF(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result, const int hf_lumi_shift) {
@@ -1395,6 +1490,19 @@ HcalTriggerPrimitiveAlgo::needLegacyFG(const HcalTrigTowerDetId& id) const
    return false;
 }
 
+bool
+HcalTriggerPrimitiveAlgo::needTowerIDinMap(const HcalTrigTowerDetId& id, int depth) const
+{
+
+   // Depth 7 for ieta 26, 27, and 28 is not considered a fine grain depth.
+   // However, the trigger tower for these ieta should still be added to the fgUpgradeMap_
+   // Otherwise, depth 7-only signal will not be analyzed.
+   unsigned int aieta = id.ietaAbs();
+   if (aieta >= 26 and aieta <= LAST_FINEGRAIN_TOWER and depth > LAST_FINEGRAIN_DEPTH)
+      return true;
+   return false;
+}
+
 void
 HcalTriggerPrimitiveAlgo::addUpgradeFG(const HcalTrigTowerDetId& id, int depth, const std::vector<std::bitset<2>>& bits)
 {
@@ -1402,7 +1510,19 @@ HcalTriggerPrimitiveAlgo::addUpgradeFG(const HcalTrigTowerDetId& id, int depth, 
       if (needLegacyFG(id)) {
          std::vector<bool> pseudo(bits.size(), false);
          addFG(id, pseudo);
+      } else if (needTowerIDinMap(id, depth)) {
+
+         // If the tower id is not in the map yet
+         // then for safety's sake add it, otherwise, no need
+         // Likewise, we're here with non-fg depth 7 so the bits are not to be added
+         auto it = fgUpgradeMap_.find(id);
+         if (it == fgUpgradeMap_.end()) {
+            FGUpgradeContainer element;
+            element.resize(bits.size());
+            fgUpgradeMap_.insert(std::make_pair(id, element)).first;
+         }
       }
+
       return;
    }
 

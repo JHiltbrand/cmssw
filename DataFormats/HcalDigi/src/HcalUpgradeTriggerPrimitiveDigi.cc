@@ -11,7 +11,8 @@ HcalUpgradeTriggerPrimitiveDigi::HcalUpgradeTriggerPrimitiveDigi(const HcalTrigT
   m_size(0),
   m_hcalPresamples(0),
   m_depth_data(8,-1),
-  m_sample_data(8,-1)
+  m_sample_data(8,-1),
+  m_peaks(8, -1)
 {}
 
 //------------------------------------------------------

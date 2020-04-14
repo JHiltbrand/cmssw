@@ -29,17 +29,11 @@ class HcalUpgradeTriggerPrimitiveDigi {
   // Set information.  MAXSAMPLES sets size limit.
   //------------------------------------------------------
 
-  void setDepthData ( std::vector<int>& d ) {
-      for (unsigned int i = 0; i < d.size(); i++) {
-          m_depth_data[i] = d[i];
-      }
-  }
+  void setDepthData ( std::vector<int> d ) { m_depth_data = std::move(d); }
 
-  void setSampleData ( std::vector<int>& p ) {
-      for (unsigned int i = 0; i < p.size(); i++) {
-          m_sample_data[i] = p[i];
-      }
-  }
+  void setSampleData ( std::vector<int> p ) { m_sample_data = std::move(p); }
+
+  void setPeakData ( std::vector<int> k ) { m_peaks = std::move(k); }
 
   void setTimingData (
 		      std::vector<double> rise_avg,
@@ -47,12 +41,12 @@ class HcalUpgradeTriggerPrimitiveDigi {
 		      std::vector<double> fall_avg,
 		      std::vector<double> fall_rms
 		      ) {
-    m_rising_avg = rise_avg;
-    m_rising_rms = rise_rms;
-    m_falling_avg = fall_avg;
-    m_falling_rms = fall_rms;
+    m_rising_avg = std::move(rise_avg);
+    m_rising_rms = std::move(rise_rms);
+    m_falling_avg = std::move(fall_avg);
+    m_falling_rms = std::move(fall_rms);
   };
-  void setOOTData ( std::vector<int> d ) { m_oot_data = d; };
+  void setOOTData ( std::vector<int> d ) { m_oot_data = std::move(d); };
 
   void setSize      ( int  size );
   void setPresamples( int  presamples );
@@ -97,6 +91,7 @@ class HcalUpgradeTriggerPrimitiveDigi {
   const HcalUpgradeTriggerPrimitiveSample& t0() const { return m_data[presamples()]; }
   int SOI_fineGrain      () const { return t0().fineGrain      (); }
   int SOI_compressedEt   () const { return t0().compressedEt   (); }
+  int SOI_isPeak         () const { return m_peaks[presamples()]; }
 
   int SOI_depth_linear(int i) const { return m_depth_data[i]; }
 
@@ -116,6 +111,7 @@ class HcalUpgradeTriggerPrimitiveDigi {
 
   std::vector<int> m_depth_data;
   std::vector<int> m_sample_data;
+  std::vector<int> m_peaks;
 
   std::vector<int> m_oot_data;
   std::vector<double> m_rising_avg;

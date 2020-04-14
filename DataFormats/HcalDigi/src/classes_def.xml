@@ -23,7 +23,8 @@
    <class name="HcalUpgradeTriggerPrimitiveSample" ClassVersion="10">
      <version ClassVersion="10" checksum="962586172"/>
    </class>
-   <class name="HcalUpgradeTriggerPrimitiveDigi" ClassVersion="16">
+   <class name="HcalUpgradeTriggerPrimitiveDigi" ClassVersion="17">
+    <version ClassVersion="17" checksum="3577707726"/>
       <version ClassVersion="10" checksum="3986635124"/>
       <version ClassVersion="11" checksum="2056527544"/>
       <version ClassVersion="12" checksum="1260353952"/>

@@ -147,13 +147,16 @@ public:
   bool validUpgradeFG(const HcalTrigTowerDetId& id, int depth) const;
   bool validChannel(const QIE10DataFrame& digi, int ts) const;
   bool needLegacyFG(const HcalTrigTowerDetId& id) const;
+  bool needTowerIDinMap(const HcalTrigTowerDetId& id, int depth) const;
 
   /// adds the actual digis
   void analyze(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result);
   void analyze(IntegerCaloSamples & samples, HcalUpgradeTriggerPrimitiveDigi & result);
   // 2017 and later: QIE11
   void analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
+  void analyzeQIE11_hw(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
   void analyzeQIE11(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
+  void analyzeQIE11_hw(IntegerCaloSamples& samples, HcalUpgradeTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
   // Version 0: RCT
   void analyzeHF(IntegerCaloSamples & samples, HcalTriggerPrimitiveDigi & result, const int hf_lumi_shift);
   void analyzeHF(IntegerCaloSamples & samples, HcalUpgradeTriggerPrimitiveDigi & result, const int hf_lumi_shift);
@@ -341,9 +344,9 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
 	if (detId.version() == 0) {
 	  //analyzeHF(item.second, result.back(), RCTScaleShift);
 	} else if (detId.version() == 1) {
-	  if (upgrade_hf_)
-	    analyzeHFQIE10(item.second, result.back(), NCTScaleShift, LongvrsShortCut);
-	  else {}
+	  if (upgrade_hf_) {
+	    //analyzeHFQIE10(item.second, result.back(), NCTScaleShift, LongvrsShortCut);
+	} else {}
 	    //  analyzeHF2016(item.second, result.back(), NCTScaleShift, LongvrsShortCut);
 	} else {
 	  // Things are going to go poorly
@@ -356,10 +359,14 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
          //  * QIE11 TP add entries into fgUpgradeMap_
          //    (not for tower 16 unless HB is upgraded, too)
          if (fgMap_.find(item.first) != fgMap_.end()) {
-            analyze(item.second, result.back());
+            //analyze(item.second, result.back());
          } else if (fgUpgradeMap_.find(item.first) != fgUpgradeMap_.end()) {
             analyzeQIE11(item.second, result.back(), fg_algo);
+            //analyzeQIE11_hw(item.second, result.back(), fg_algo);
          }
+         else { 
+            //std::cout << "WE ARE NOT ANALYZING TP WITH ID: " << item.first << std::endl;
+        }
       }
    }
 
