@@ -384,6 +384,13 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
    auto& msb = fgUpgradeMap_[samples.id()];
    IntegerCaloSamples sum(samples.id(), samples.size());
 
+   // store individual sample data
+   // Save the 8TS digi as the TP for weight studies
+   std::vector<int> linearized(8, 0);
+   for(unsigned int ibin = 0; ibin < dgSamples; ++ibin) {
+       linearized[ibin] = samples[ibin];
+   }
+
    HcalDetId detId(samples.id());
 
    // Get the |ieta| for current sample
@@ -420,6 +427,8 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
    IntegerCaloSamples output(samples.id(), tpSamples);
    output.setPresamples(tpPresamples);
 
+   std::vector<int> peaks(tpSamples, 0);
+
    for (unsigned int ibin = 0; ibin < tpSamples; ++ibin) {
       // ibin - index for output TP
       // idx - index for samples + shift - tpPresamples
@@ -432,18 +441,19 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
          continue;
       }
 
-      bool isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold);
+      int isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold) ? 1 : 0;
 
-      if (isPeak){
-         output[ibin] = std::min<unsigned int>(sum[idx],QIE11_MAX_LINEARIZATION_ET);
-      } else {
-         // Not a peak
-         output[ibin] = 0;
-      }
+      output[ibin] = std::min<unsigned int>(sum[idx], QIE11_MAX_LINEARIZATION_ET);
+      peaks[ibin] = isPeak;
+
       // peak-finding is not applied for FG bits
       finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
    }
    outcoder_->compress(output, finegrain, result);
+    
+   result.setSampleData(linearized);
+   result.setPeakData(peaks);
+
 }
 
 void HcalTriggerPrimitiveAlgo::analyzeHF(IntegerCaloSamples& samples,
