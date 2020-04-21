@@ -2,7 +2,8 @@
 
 HcalTriggerPrimitiveDigi::HcalTriggerPrimitiveDigi() : size_(0), hcalPresamples_(0) {}
 HcalTriggerPrimitiveDigi::HcalTriggerPrimitiveDigi(const HcalTrigTowerDetId& id)
-    : id_(id), size_(0), hcalPresamples_(0) {}
+    : id_(id), size_(0), hcalPresamples_(0), m_sample_data(8,-1), m_peaks(8, -1)
+ {}
 
 void HcalTriggerPrimitiveDigi::setSize(int size) {
   if (size < 0)
