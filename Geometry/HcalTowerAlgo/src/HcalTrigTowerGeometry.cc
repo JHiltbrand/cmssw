@@ -12,7 +12,7 @@ HcalTrigTowerGeometry::HcalTrigTowerGeometry(const HcalTopology* topology) : the
   use2017_ = tmode >= HcalTopologyMode::TriggerMode_2017 or tmode == HcalTopologyMode::TriggerMode_2018legacy;
 }
 
-std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId& cellId) const {
+std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId& cellId, unsigned int depth) const {
   std::vector<HcalTrigTowerDetId> results;
 
   if (cellId.subdet() == HcalForward) {
@@ -32,7 +32,7 @@ std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId&
       // go two cells per trigger tower.
 
       int iphi = (((cellId.iphi() + 1) / 4) * 4 + 1) % 72;  // 71+1 --> 1, 3+5 --> 5
-      results.emplace_back(HcalTrigTowerDetId(ieta, iphi));
+      results.emplace_back(HcalTrigTowerDetId(ieta, iphi, depth));
     }
     if (use1x1_) {
       int hfRing = cellId.ietaAbs();
@@ -42,7 +42,7 @@ std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId&
       int ieta = hfRing * cellId.zside();
       int iphi = cellId.iphi();
 
-      HcalTrigTowerDetId id(ieta, iphi);
+      HcalTrigTowerDetId id(ieta, iphi, depth);
       id.setVersion(1);  // version 1 for 1x1 HF granularity
       results.emplace_back(id);
     }
@@ -50,16 +50,16 @@ std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId&
   } else {
     // the first twenty rings are one-to-one
     if (cellId.ietaAbs() <= theTopology->lastHBRing()) {
-      results.emplace_back(HcalTrigTowerDetId(cellId.ieta(), cellId.iphi()));
+      results.emplace_back(HcalTrigTowerDetId(cellId.ieta(), cellId.iphi(), depth));
     } else if (theTopology->maxDepthHE() == 0) {
       // Ignore these
     } else if (cellId.ietaAbs() < theTopology->firstHEDoublePhiRing()) {
-      results.emplace_back(HcalTrigTowerDetId(cellId.ieta(), cellId.iphi()));
+      results.emplace_back(HcalTrigTowerDetId(cellId.ieta(), cellId.iphi(), depth));
     } else {
       // the remaining rings are two-to-one in phi
       int iphi1 = cellId.iphi();
       int ieta = cellId.ieta();
-      int depth = cellId.depth();
+      int celldepth = cellId.depth();
       // the last eta ring in HE is split.  Recombine.
       if (ieta == theTopology->lastHERing())
         --ieta;
@@ -67,14 +67,14 @@ std::vector<HcalTrigTowerDetId> HcalTrigTowerGeometry::towerIds(const HcalDetId&
         ++ieta;
 
       if (use2017_) {
-        if (ieta == 26 and depth == 7)
+        if (ieta == 26 and celldepth == 7)
           ++ieta;
-        if (ieta == -26 and depth == 7)
+        if (ieta == -26 and celldepth == 7)
           --ieta;
       }
 
-      results.emplace_back(HcalTrigTowerDetId(ieta, iphi1));
-      results.emplace_back(HcalTrigTowerDetId(ieta, iphi1 + 1));
+      results.emplace_back(HcalTrigTowerDetId(ieta, iphi1, depth));
+      results.emplace_back(HcalTrigTowerDetId(ieta, iphi1 + 1, depth));
     }
   }
 
