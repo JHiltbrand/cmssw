@@ -4,3 +4,7 @@ __init__.py
 .#*
 #*#
 *~
+Debug
+HcalTrigger
+L1Trigger/L1TCalorimeter/data/
+L1Trigger/L1TMuon/data/
