@@ -103,6 +103,7 @@ private:
   void analyze(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result);
   // 2017 and later: QIE11
   void analyzeQIE11(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
+  void analyzeQIE11_hw(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const HcalFinegrainBit& fg_algo);
   // Version 0: RCT
   void analyzeHF(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result, const int hf_lumi_shift);
   // Version 1: 1x1
@@ -284,7 +285,7 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
       if (fgMap_.find(item.first) != fgMap_.end()) {
         analyze(item.second, result.back());
       } else if (fgUpgradeMap_.find(item.first) != fgUpgradeMap_.end()) {
-        analyzeQIE11(item.second, result.back(), fg_algo);
+        analyzeQIE11_hw(item.second, result.back(), fg_algo);
       }
     }
   }

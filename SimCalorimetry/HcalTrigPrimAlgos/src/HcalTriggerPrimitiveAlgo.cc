@@ -456,6 +456,107 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
 
 }
 
+void HcalTriggerPrimitiveAlgo::analyzeQIE11_hw(IntegerCaloSamples& samples,
+                                            HcalTriggerPrimitiveDigi& result,
+                                            const HcalFinegrainBit& fg_algo) {
+
+   unsigned int tpSamples = numberOfSamplesQIE11_;
+   unsigned int dgPresamples = samples.presamples(); 
+   unsigned int tpPresamples = numberOfPresamplesQIE11_;
+   unsigned int shift = dgPresamples - tpPresamples;
+   unsigned int dgSamples = samples.size();
+
+   unsigned int shrink = tpSamples - 1;
+   auto& msb = fgUpgradeMap_[samples.id()];
+   IntegerCaloSamples sum(samples.id(), samples.size());
+
+   // store individual sample data
+   // Save the 8TS digi as the TP for weight studies
+   std::vector<int> linearized(8, 0);
+   for(unsigned int ibin = 0; ibin < dgSamples; ++ibin) {
+       linearized[ibin] = samples[ibin];
+   }
+
+   HcalDetId detId(samples.id());
+
+   // Get the |ieta| for current sample
+   unsigned int theIeta = detId.ietaAbs();
+
+   std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
+   //slide algo window
+   for(unsigned int ibin = 0; ibin < dgSamples - shrink; ++ibin) {
+      int algosumvalue = 0;
+      for(unsigned int i = 0; i < tpSamples; i++) {
+	      //add up value * scale factor
+	      // In addition, divide by two in the 10 degree phi segmentation region
+	      // to mimic 5 degree segmentation for the trigger
+	      unsigned int sample = samples[ibin+i];
+	      if(sample>QIE11_MAX_LINEARIZATION_ET) sample = QIE11_MAX_LINEARIZATION_ET;
+
+          // Usually use a segmentation factor of 1.0 but for ieta >= 21 use 0.5
+          double segmentationFactor = 1.0;
+          //if (ids.size() == 2) { segmentationFactor = 0.5; } 
+
+          // Based on the |ieta| of the sample, retrieve the correct region weight
+          double rawWeight = weightsQIE11_[theIeta][i];
+          int theWeight = std::round(256 * std::abs(rawWeight));
+
+          if (rawWeight < 0) theWeight *= -1;
+
+	      algosumvalue += int(sample * segmentationFactor * theWeight);
+      }
+      if (algosumvalue<0) sum[ibin]=0;            // low-side
+                                                  //high-side
+      //else if (algosumvalue>QIE11_LINEARIZATION_ET) sum[ibin]=QIE11_LINEARIZATION_ET;
+      else sum[ibin] = algosumvalue;              //assign value to sum[]
+   }
+
+   std::vector<int> finegrain(8,false);
+
+   IntegerCaloSamples output(samples.id(), 8);
+   output.setPresamples(tpPresamples);
+
+   std::vector<int> peaks(8, 0);
+
+   if (theIeta >= 21) std::cout << theIeta << "," << std::round(256 * std::abs(weightsQIE11_[theIeta][0])) << "," << 2048 << "," << 2048 << "," << 1 << std::endl;
+   for (unsigned int ibin = 0; ibin < 8; ++ibin) {
+      // ibin - index for output TP
+      // idx - index for samples + shift - tpPresamples
+      // Subtract tpPresamples one more time to get SOI in the right position
+      //int idx = ibin + shift - tpPresamples;
+      int idx = ibin - 1;
+
+      // When idx is <= 0 peakfind would compare out-of-bounds of the vector. Avoid this ambiguity
+      if (idx < 0) {
+         output[ibin] = 0;
+         peaks[ibin] = 0;
+         continue;
+      } else if (idx == 0 or idx == 7) {
+         output[ibin] = std::min<unsigned int>(sum[idx]>>8, QIE11_MAX_LINEARIZATION_ET);
+         peaks[ibin] = 0;
+         continue;
+      }
+
+      int isPeak = (sum[idx] > sum[idx-1] && sum[idx] >= sum[idx+1] && sum[idx] > theThreshold) ? 1 : 0;
+
+      output[ibin] = std::min<unsigned int>(sum[idx]>>8, QIE11_MAX_LINEARIZATION_ET);
+      peaks[ibin] = isPeak;
+
+      // peak-finding is not applied for FG bits
+      finegrain[ibin] = fg_algo.compute(msb[idx]).to_ulong();
+   }
+   if (theIeta >= 21) {
+   for (unsigned int i = 0; i < 8; i++) {
+    std::cout << theIeta << "," << std::round(256 * std::abs(weightsQIE11_[theIeta][0]))<< "," << samples[i] << "," << output[i] << "," << peaks[i] << std::endl;
+   }
+   std::cout << theIeta << "," << std::round(256 * std::abs(weightsQIE11_[theIeta][0]))<< "," << 0 << "," << 0 << "," << 0 << std::endl;
+   }
+   outcoder_->compress(output, finegrain, result);
+    
+   result.setSampleData(linearized);
+   result.setPeakData(peaks);
+
+}
 void HcalTriggerPrimitiveAlgo::analyzeHF(IntegerCaloSamples& samples,
                                          HcalTriggerPrimitiveDigi& result,
                                          const int hf_lumi_shift) {
