@@ -285,7 +285,7 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
       if (fgMap_.find(item.first) != fgMap_.end()) {
         analyze(item.second, result.back());
       } else if (fgUpgradeMap_.find(item.first) != fgUpgradeMap_.end()) {
-        analyzeQIE11_hw(item.second, result.back(), fg_algo);
+        analyzeQIE11(item.second, result.back(), fg_algo);
       }
     }
   }

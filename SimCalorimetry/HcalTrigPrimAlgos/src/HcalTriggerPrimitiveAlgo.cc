@@ -397,11 +397,6 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
        linearized[ibin] = samples[ibin];
    }
 
-   HcalDetId detId(samples.id());
-
-   // Get the |ieta| for current sample
-   unsigned int theIeta = detId.ietaAbs();
-
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
    //slide algo window
    for(unsigned int ibin = 0; ibin < dgSamples - shrink; ++ibin) {
@@ -466,9 +461,14 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11_hw(IntegerCaloSamples& samples,
                                             HcalTriggerPrimitiveDigi& result,
                                             const HcalFinegrainBit& fg_algo) {
 
-   unsigned int tpSamples = numberOfSamplesQIE11_;
+   HcalDetId detId(samples.id());
+
+   // Get the |ieta| for current sample
+   unsigned int theIeta = detId.ietaAbs();
+
+   unsigned int tpSamples = weightsQIE11_[theIeta].size();
    unsigned int dgPresamples = samples.presamples(); 
-   unsigned int tpPresamples = numberOfPresamplesQIE11_;
+   unsigned int tpPresamples = (theIeta <= HBHE_OVERLAP_TOWER) ? numberOfPresamplesHBQIE11_ : numberOfPresamplesHEQIE11_;
    unsigned int shift = dgPresamples - tpPresamples;
    unsigned int dgSamples = samples.size();
 
@@ -482,11 +482,6 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11_hw(IntegerCaloSamples& samples,
    for(unsigned int ibin = 0; ibin < dgSamples; ++ibin) {
        linearized[ibin] = samples[ibin];
    }
-
-   HcalDetId detId(samples.id());
-
-   // Get the |ieta| for current sample
-   unsigned int theIeta = detId.ietaAbs();
 
    std::vector<HcalTrigTowerDetId> ids = theTrigTowerGeometry->towerIds(detId);
    //slide algo window
