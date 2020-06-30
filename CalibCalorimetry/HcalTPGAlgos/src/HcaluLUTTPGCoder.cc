@@ -62,7 +62,8 @@ HcaluLUTTPGCoder::HcaluLUTTPGCoder()
       cosh_ieta_28_HE_high_depths_{},
       cosh_ieta_29_HE_{},
       allLinear_{},
-      contain1TS_{},
+      contain1TSHB_{},
+      contain1TSHE_{},
       linearLSB_QIE8_{},
       linearLSB_QIE11_{},
       linearLSB_QIE11Overlap_{} {}
@@ -76,7 +77,8 @@ void HcaluLUTTPGCoder::init(const HcalTopology* top, const HcalTimeSlew* delay) 
   FG_HF_thresholds_ = {0, 0};
   bitToMask_ = 0;
   allLinear_ = false;
-  contain1TS_ = false;
+  contain1TSHB_ = false;
+  contain1TSHE_ = false;
   linearLSB_QIE8_ = 1.;
   linearLSB_QIE11_ = 1.;
   linearLSB_QIE11Overlap_ = 1.;
@@ -417,7 +419,12 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
       int granularity = meta->getLutGranularity();
 
       double correctionPhaseNS = conditions.getHcalRecoParam(cell)->correctionPhaseNS();
-      if (containPhaseNS_ != -1.0) correctionPhaseNS = containPhaseNS_;
+
+      // When containPhaseNS is not -999.0, and for QIE11 only, override from configuration
+      if (qieType == QIE11) {
+        if (containPhaseNSHB_ != -999.0 and cell.ietaAbs() <= topo_->lastHBRing()) correctionPhaseNS = containPhaseNSHB_;
+        else if (containPhaseNSHE_ != -999.0 and cell.ietaAbs() > topo_->lastHBRing()) correctionPhaseNS = containPhaseNSHE_;
+      }
       for (unsigned int adc = 0; adc < SIZE; ++adc) {
         if (isMasked)
           lut[adc] = 0;
@@ -433,9 +440,12 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
             // from the individual samples
             double correctedCharge = containmentCorrection1TS * adc2fC(adc);
             double containmentCorrection2TSCorrected = pulseCorr_->correction(cell, 2, correctionPhaseNS, correctedCharge);
-            if (contain1TS_) containmentCorrection = containmentCorrection1TS;
-            else containmentCorrection = containmentCorrection2TSCorrected; 
+
+            containmentCorrection = containmentCorrection2TSCorrected; 
             if (qieType == QIE11) {
+              // When contain1TS_ is set, it should still only apply for QIE11-related things
+              if ((contain1TSHB_ and subdet == HcalBarrel) or (contain1TSHE_ and subdet == HcalEndcap)) containmentCorrection = containmentCorrection1TS;
+
               const HcalSiPMParameter& siPMParameter(*conditions.getHcalSiPMParameter(cell));
               HcalSiPMnonlinearity corr(
                   conditions.getHcalSiPMCharacteristics()->getNonLinearities(siPMParameter.getType()));
