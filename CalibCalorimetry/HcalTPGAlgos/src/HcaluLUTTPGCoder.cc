@@ -61,8 +61,8 @@ HcaluLUTTPGCoder::HcaluLUTTPGCoder()
       cosh_ieta_28_HE_high_depths_{},
       cosh_ieta_29_HE_{},
       allLinear_{},
-      contain1TSHB_{},
-      contain1TSHE_{},
+      contain2TSHB_{},
+      contain2TSHE_{},
       applyFixPCC_{},
       linearLSB_QIE8_{},
       linearLSB_QIE11_{},
@@ -77,8 +77,8 @@ void HcaluLUTTPGCoder::init(const HcalTopology* top, const HcalTimeSlew* delay) 
   FG_HF_thresholds_ = {0, 0};
   bitToMask_ = 0;
   allLinear_ = false;
-  contain1TSHB_ = false;
-  contain1TSHE_ = false;
+  contain2TSHB_ = false;
+  contain2TSHE_ = false;
   applyFixPCC_ = false;
   linearLSB_QIE8_ = 1.;
   linearLSB_QIE11_ = 1.;
@@ -497,12 +497,12 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
             double containmentCorrection2TSCorrected =
                 pulseCorr_->correction(cell, 2, correctionPhaseNS, correctedCharge);
             if (qieType == QIE11) {
-              // When contain1TS_ is set, it should still only apply for QIE11-related things
-              if ((((contain1TSHB_ and overrideDBweightsAndFilterHB_) or newHBtp) and cell.ietaAbs() <= lastHBRing) or
-                  (((contain1TSHE_ and overrideDBweightsAndFilterHE_) or newHEtp) and cell.ietaAbs() > lastHBRing)) {
-                containmentCorrection = containmentCorrection1TS;
-              } else {
+              // When contain2TS_ is set, it should still only apply for QIE11-related things
+              if ((((contain2TSHB_ and overrideDBweightsAndFilterHB_) or not newHBtp) and cell.ietaAbs() <= lastHBRing) or
+                  (((contain2TSHE_ and overrideDBweightsAndFilterHE_) or not newHEtp) and cell.ietaAbs() > lastHBRing)) {
                 containmentCorrection = containmentCorrection2TSCorrected;
+              } else {
+                containmentCorrection = containmentCorrection1TS;
               }
 
               const HcalSiPMParameter& siPMParameter(*conditions.getHcalSiPMParameter(cell));

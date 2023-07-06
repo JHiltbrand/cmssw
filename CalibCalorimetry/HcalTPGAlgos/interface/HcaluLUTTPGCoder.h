@@ -66,8 +66,8 @@ public:
     linearLSB_QIE11_ = lsb11;
     linearLSB_QIE11Overlap_ = lsb11overlap;
   };
-  void set1TSContainHB(bool contain1TSHB) { contain1TSHB_ = contain1TSHB; }
-  void set1TSContainHE(bool contain1TSHE) { contain1TSHE_ = contain1TSHE; }
+  void set2TSContainHB(bool contain2TSHB) { contain2TSHB_ = contain2TSHB; }
+  void set2TSContainHE(bool contain2TSHE) { contain2TSHE_ = contain2TSHE; }
   void setContainPhaseHB(double containPhaseNSHB) { containPhaseNSHB_ = containPhaseNSHB; }
   void setContainPhaseHE(double containPhaseNSHE) { containPhaseNSHE_ = containPhaseNSHE; }
   void setApplyFixPCC(double applyFixPCC) { applyFixPCC_ = applyFixPCC; }
@@ -121,7 +121,7 @@ private:
   // edge cases not covered by the cosh_ieta_ map
   double cosh_ieta_28_HE_low_depths_, cosh_ieta_28_HE_high_depths_, cosh_ieta_29_HE_;
   bool allLinear_;
-  bool contain1TSHB_, contain1TSHE_;
+  bool contain2TSHB_, contain2TSHE_;
   double containPhaseNSHB_ = 6.0;
   double containPhaseNSHE_ = 6.0;
   bool applyFixPCC_;

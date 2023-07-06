@@ -56,8 +56,8 @@ simHcalTriggerPrimitiveDigis = cms.EDProducer("HcalTrigPrimDigiProducer",
     numberOfPresamples = cms.int32(2),
     numberOfSamplesHF = cms.int32(4),
     numberOfPresamplesHF = cms.int32(2),
-    numberOfFilterPresamplesHBQIE11 = cms.int32(0),
-    numberOfFilterPresamplesHEQIE11 = cms.int32(0),
+    numberOfFilterPresamplesHBQIE11 = cms.int32(1),
+    numberOfFilterPresamplesHEQIE11 = cms.int32(1),
     useTDCInMinBiasBits = cms.bool(False), # TDC information not used in MB fine grain bits
     MinSignalThreshold = cms.uint32(0), # For HF PMT veto
     PMTNoiseThreshold = cms.uint32(0),  # For HF PMT veto
@@ -76,7 +76,6 @@ simHcalTriggerPrimitiveDigis = cms.EDProducer("HcalTrigPrimDigiProducer",
     #     FGThreshold=cms.uint32(12)
     # ),
 
-    #vdouble weights = { -1, -1, 1, 1} //low lumi algo
     # Input digi label (_must_ be without zero-suppression!)
     inputLabel = cms.VInputTag(cms.InputTag('simHcalUnsuppressedDigis'),
                                cms.InputTag('simHcalUnsuppressedDigis')),

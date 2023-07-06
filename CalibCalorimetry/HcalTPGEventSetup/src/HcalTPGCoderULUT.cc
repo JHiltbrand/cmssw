@@ -57,7 +57,7 @@ private:
   edm::ESGetToken<HcalTimeSlew, HcalTimeSlewRecord> delayToken_;
   edm::ESGetToken<HcalDbService, HcalDbRecord> serviceToken_;
   bool read_FGLut_, read_Ascii_, read_XML_, LUTGenerationMode_, linearLUTs_;
-  bool contain1TSHB_, contain1TSHE_;
+  bool contain2TSHB_, contain2TSHE_;
   double containPhaseNSHB_, containPhaseNSHE_;
   bool applyFixPCC_;
   bool overrideDBweightsAndFilterHB_, overrideDBweightsAndFilterHE_;
@@ -83,8 +83,8 @@ HcalTPGCoderULUT::HcalTPGCoderULUT(const edm::ParameterSet& iConfig) {
   read_XML_ = iConfig.getParameter<bool>("read_XML_LUTs");
   read_FGLut_ = iConfig.getParameter<bool>("read_FG_LUTs");
   fgfile_ = iConfig.getParameter<edm::FileInPath>("FGLUTs");
-  contain1TSHB_ = iConfig.getParameter<bool>("contain1TSHB");
-  contain1TSHE_ = iConfig.getParameter<bool>("contain1TSHE");
+  contain2TSHB_ = iConfig.getParameter<bool>("contain2TSHB");
+  contain2TSHE_ = iConfig.getParameter<bool>("contain2TSHE");
   containPhaseNSHB_ = iConfig.getParameter<double>("containPhaseNSHB");
   containPhaseNSHE_ = iConfig.getParameter<double>("containPhaseNSHE");
   overrideDBweightsAndFilterHB_ = iConfig.getParameter<bool>("overrideDBweightsAndFilterHB");
@@ -119,8 +119,8 @@ void HcalTPGCoderULUT::buildCoder(const HcalTopology* topo, const HcalTimeSlew* 
   theCoder->setOverrideDBweightsAndFilterHB(overrideDBweightsAndFilterHB_);
   theCoder->setOverrideDBweightsAndFilterHE(overrideDBweightsAndFilterHE_);
 
-  theCoder->set1TSContainHB(contain1TSHB_);
-  theCoder->set1TSContainHE(contain1TSHE_);
+  theCoder->set2TSContainHB(contain2TSHB_);
+  theCoder->set2TSContainHE(contain2TSHE_);
 
   theCoder->setContainPhaseHB(containPhaseNSHB_);
   theCoder->setContainPhaseHE(containPhaseNSHE_);
