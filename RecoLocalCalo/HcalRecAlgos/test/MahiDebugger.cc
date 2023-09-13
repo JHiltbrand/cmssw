@@ -365,7 +365,7 @@ void MahiDebugger::fillDescriptions(edm::ConfigurationDescriptions& descriptions
   desc.add<bool>("dynamicPed");
   desc.add<bool>("calculateArrivalTime");
   desc.add<int>("timeAlgo");
-  desc.add<double>("thEnergeticPulse");
+  desc.add<double>("thEnergeticPulses");
   desc.add<double>("ts4Thresh");
   desc.add<double>("chiSqSwitch");
   desc.add<bool>("applyTimeSlew");
