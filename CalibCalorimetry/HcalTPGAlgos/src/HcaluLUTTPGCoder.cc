@@ -449,7 +449,7 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
 
     ped_[lutId] = ped;
     gain_[lutId] = gain;
-    bool isMasked = ((status & bitToMask_) > 0) || (cellIphi == 52 && (cellIeta == 9 || cellIeta == 12));
+    bool isMasked = ((status & bitToMask_) > 0) || (cellIphi == 52 && (cellIeta >= 9 && cellIeta <= 12));
     float rcalib = meta->getRCalib();
 
     auto adc2fC = [channelCoder, shape](unsigned int adc) {
