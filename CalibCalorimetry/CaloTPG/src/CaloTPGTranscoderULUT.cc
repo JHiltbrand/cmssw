@@ -70,8 +70,13 @@ void CaloTPGTranscoderULUT::loadHCALCompress(HcalLutMetadata const& lutMetadata,
     unsigned int threshold = meta->getOutputLutThreshold();
 
     int ieta = id.ieta();
+    int iphi = id.iphi();
     int version = id.version();
     bool isHBHE = (abs(ieta) < theTrigTowerGeometry.firstHFTower(version));
+
+    unsigned int zeroFactor = 1;
+    if (ieta == 2 && iphi == 35)
+        zeroFactor = 0;
 
     unsigned int lutsize = getOutputLUTSize(id);
     outputLUT_[index].resize(lutsize);
@@ -82,13 +87,13 @@ void CaloTPGTranscoderULUT::loadHCALCompress(HcalLutMetadata const& lutMetadata,
     if (isHBHE) {
       for (unsigned int i = threshold; i < lutsize; ++i)
         if (allLinear_) {
-          outputLUT_[index][i] = isOnlyQIE11(id) ? linearQIE11LUT[i] : linearQIE8LUT[i];
+          outputLUT_[index][i] = isOnlyQIE11(id) ? zeroFactor*linearQIE11LUT[i] : linearQIE8LUT[i];
           //Modifying the saturation (127 -> 255) for the 'split cells'.
           if (abs(ieta) > 20 && isOnlyQIE11(id) && linearQIE11LUT[i] >= (TPGMAX - 2) / 2.) {
-            outputLUT_[index][i] = TPGMAX - 1;
+            outputLUT_[index][i] = zeroFactor*(TPGMAX - 1);
           }
         } else {
-          outputLUT_[index][i] = analyticalLUT[i];
+          outputLUT_[index][i] = zeroFactor*analyticalLUT[i];
         }
     } else {
       for (unsigned int i = threshold; i < lutsize; ++i)
