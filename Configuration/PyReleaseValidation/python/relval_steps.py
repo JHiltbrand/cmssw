@@ -45,8 +45,8 @@ step1Up2024HiProdDefaults = merge ([{'--conditions':'auto:phase1_2024_realistic_
 steps = Steps()
 
 #### Event to runs
-event_steps = [0.01,0.05,0.15,0.25,0.5,1] #in millions
-event_steps_k = ["10k","50k","150k","250k","500k","1M"]
+event_steps = [0.01,0.05,0.1,0.15,0.25,0.5,1] #in millions
+event_steps_k = ["10k","50k","100k","150k","250k","500k","1M"] ##TODO add an helper to convert the numbers to strings
 event_steps_dict = dict(zip(event_steps_k,event_steps))
 #### Production test section ####
 steps['ProdMinBias']=merge([{'cfg':'MinBias_8TeV_pythia8_TuneCUETP8M1_cff','--relval':'9000,300'},step1Defaults])
@@ -653,7 +653,7 @@ for era in eras_2024:
     for pd in pds_2024:
         dataset = "/" + pd + "/" + era + "-v1/RAW"
         for e_key,evs in event_steps_dict.items():
-            step_name = "Run" + pd + era.split("Run")[1] + "_" + e_key
+            step_name = "Run" + pd.replace("ParkingDouble","Park2") + era.split("Run")[1] + "_" + e_key
             steps[step_name] = {'INPUT':InputInfo(dataSet=dataset,label=era.split("Run")[1],events=int(evs*1e6), skimEvents=True, location='STD')}
 
 ###2023 
@@ -665,7 +665,7 @@ for era in eras_2023:
     for pd in pds_2023:
         dataset = "/" + pd + "/" + era + "-v1/RAW"
         for e_key,evs in event_steps_dict.items():
-            step_name = "Run" + pd + era.split("Run")[1] + "_" + e_key
+            step_name = "Run" + pd.replace("ParkingDouble","Park2") + era.split("Run")[1] + "_" + e_key
             steps[step_name] = {'INPUT':InputInfo(dataSet=dataset,label=era.split("Run")[1],events=int(evs*1e6), skimEvents=True, location='STD')}
 
 ###2022 
@@ -1213,7 +1213,7 @@ steps['CosmicsSPLoose_UP18']=merge([{'cfg':'UndergroundCosmicSPLooseMu_cfi.py','
 
 # Phase2 cosmics with geometry D98
 from Configuration.PyReleaseValidation.upgradeWorkflowComponents import upgradeProperties
-phase2CosInfo=upgradeProperties[2026]['2026D98'] # so if the default changes, change wf only here
+phase2CosInfo=upgradeProperties['Run4']['Run4D98'] # so if the default changes, change wf only here
 
 steps['Cosmics_Phase2']=merge([{'cfg':'UndergroundCosmicMu_cfi.py',
                                 '-n':'500',
@@ -3178,7 +3178,6 @@ for s in autoSkim.keys():
     else:
         steps['SKIM'+s.upper()+'RUN3_reHLT_2023'] = merge([{'-s':'RAW2DIGI,L1Reco,RECO,SKIM:%s,PAT,NANO,DQM:@standardDQM+@miniAODDQM+@nanoAODDQM'%(autoSkim[s])},steps['RECONANORUN3_reHLT_2023']])
 
-
 # mask away - to be removed once we'll migrate the matrix to be fully unscheduled for RECO step
 #steps['RECOmAOD']=merge([step3DefaultsUnsch])
 #steps['RECOmAODUP15']=merge([step3Up2015DefaultsUnsch])
@@ -3273,6 +3272,9 @@ steps['RECOHI2024MBAPPROXCLUSTERS']=merge([hiDefaults2024_approxClusters,{'-s':'
                                                                           '--era':'Run3_pp_on_PbPb_2024',
                                                                           '--procModifiers':'genJetSubEvent',
                                                                           },step3Up2015Defaults])
+
+steps['SKIMHIFORWARDRUN3_2024'] = merge([hiDefaults2024, {'-s':'RAW2DIGI,L1Reco,RECO,SKIM:UPCMonopole,PAT,VALIDATION:@standardValidation+@miniAODValidation,DQM:@standardDQM+@miniAODDQM'},steps['RECOHI2024']])
+steps['SKIMHIPHYSICSRAWPRIMERUN3_2024'] = merge([hiDefaults2024_approxClusters, {'-s':'RAW2DIGI,L1Reco,RECO,SKIM:PbPbEMu+PbPbZEE+PbPbZMu+PbPbHighPtJets,PAT,VALIDATION:@standardValidation+@miniAODValidation,DQM:@standardDQM+@miniAODDQM'},steps['RECOHI2024']])
 
 steps['MINIHI2024PROD']=merge([hiDefaults2024,{'-s':'PAT',
                                                '--datatier':'MINIAODSIM',
@@ -4366,7 +4368,7 @@ steps['NanoFullHEfail']={'-s':'NANO',
 ####From this line till the end of the file :
 ####UPGRADE WORKFLOWS IN PREPARATION - Gaelle's sandbox -
 #####Accessible only through the option --what upgrade
-#####(unless specifically added to relval_2026.py)
+#####(unless specifically added to relval_Run4.py)
 #####Transparent for any of the standard workflows
 #### list of worflows defined (not necessarly running though): runTheMatrix.py --what upgrade -n
 ####
@@ -4390,14 +4392,14 @@ defaultDataSets['2025']='CMSSW_14_1_0_pre7-140X_mcRun3_2024_realistic_v21_STD_Re
 defaultDataSets['2024HLTOnDigi'] = defaultDataSets["2024SimOnGen"] = defaultDataSets['2024']
 defaultDataSets["2025HLTOnDigi"] = defaultDataSets["2025SimOnGen"] = defaultDataSets['2025']
 defaultDataSets['2024FS']='CMSSW_13_0_11-130X_mcRun3_2023_realistic_withEarly2023BS_v1_FastSim-v' #To replace with new dataset
-defaultDataSets['2026D49']='CMSSW_12_0_0_pre4-113X_mcRun4_realistic_v7_2026D49noPU-v'
-defaultDataSets['2026D76']='CMSSW_12_0_0_pre4-113X_mcRun4_realistic_v7_2026D76noPU-v'
-defaultDataSets['2026D77']='CMSSW_12_1_0_pre2-113X_mcRun4_realistic_v7_2026D77noPU-v'
-defaultDataSets['2026D88']='CMSSW_12_3_0_pre5-123X_mcRun4_realistic_v4_2026D88noPU-v'
-defaultDataSets['2026D95']='CMSSW_13_1_0_pre1-130X_mcRun4_realistic_v2_2026D95noPU-v'
-defaultDataSets['2026D96']='CMSSW_13_1_0_pre1-130X_mcRun4_realistic_v2_2026D96noPU-v'
-defaultDataSets['2026D98']='CMSSW_13_2_0_pre1-131X_mcRun4_realistic_v5_2026D98noPU-v'
-defaultDataSets['2026D110']='CMSSW_14_1_0-141X_mcRun4_realistic_v1_STD_RegeneratedGS_2026D110_noPU-v'
+defaultDataSets['Run4D49']='CMSSW_12_0_0_pre4-113X_mcRun4_realistic_v7_2026D49noPU-v'
+defaultDataSets['Run4D76']='CMSSW_12_0_0_pre4-113X_mcRun4_realistic_v7_2026D76noPU-v'
+defaultDataSets['Run4D77']='CMSSW_12_1_0_pre2-113X_mcRun4_realistic_v7_2026D77noPU-v'
+defaultDataSets['Run4D88']='CMSSW_12_3_0_pre5-123X_mcRun4_realistic_v4_2026D88noPU-v'
+defaultDataSets['Run4D95']='CMSSW_13_1_0_pre1-130X_mcRun4_realistic_v2_2026D95noPU-v'
+defaultDataSets['Run4D96']='CMSSW_13_1_0_pre1-130X_mcRun4_realistic_v2_2026D96noPU-v'
+defaultDataSets['Run4D98']='CMSSW_13_2_0_pre1-131X_mcRun4_realistic_v5_2026D98noPU-v'
+defaultDataSets['Run4D110']='CMSSW_14_1_0-141X_mcRun4_realistic_v1_STD_RegeneratedGS_2026D110_noPU-v'
 
 ## HIN
 defaultDataSets['2023HIN']='CCMSSW_14_1_0-PU_140X_mcRun3_2023_realistic_HI_v4_STD_2023HIN_PU-v'
@@ -4561,7 +4563,7 @@ for year,k in [(year,k) for year in upgradeKeys for k in upgradeKeys[year]]:
                                  '--outputCommands' : '"drop *_*_*_GEN,drop *_*_*_DIGI2RAW"'
                                  }
 
-    upgradeStepDict['HLT75e33'][k] = {'-s':'HLT:@relval2026',
+    upgradeStepDict['HLT75e33'][k] = {'-s':'HLT:@relvalRun4',
                                       '--processName':'HLTX',
                                       '--conditions':gt,
                                       '--datatier':'FEVT',
