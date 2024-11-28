@@ -27,6 +27,21 @@ void HcalTriggerPrimitiveDigi::setZSInfo(bool unsuppressed, bool markAndPass) {
     hcalPresamples_ |= 0x20;
 }
 
+void HcalTriggerPrimitiveDigi::setInputLinearFrame(const IntegerCaloSamples& inputLinearFrame) {
+    for (int i = 0; i < inputLinearFrame.size(); i++)
+        inputLinearFrame_[i] = inputLinearFrame[i];
+}
+
+void HcalTriggerPrimitiveDigi::setOutputLinearFrame(const IntegerCaloSamples& outputLinearFrame) {
+    for (int i = 0; i < outputLinearFrame.size(); i++)
+        outputLinearFrame_[i] = outputLinearFrame[i];
+}
+
+void HcalTriggerPrimitiveDigi::setVetoedTPs(const std::vector<uint8_t>& vetoedTPs) {
+    for (unsigned int i = 0; i < vetoedTPs.size(); i++)
+        vetoedTPs_[i] = vetoedTPs[i];
+}
+
 std::ostream& operator<<(std::ostream& s, const HcalTriggerPrimitiveDigi& digi) {
   s << digi.id() << " " << digi.size() << " samples " << digi.presamples() << " presamples";
   if (digi.zsUnsuppressed())
