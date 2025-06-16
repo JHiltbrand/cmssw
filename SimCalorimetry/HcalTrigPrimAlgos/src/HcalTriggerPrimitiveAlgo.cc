@@ -572,6 +572,7 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
     }
   }
 
+  std::vector<uint8_t> vetoedTPs(tpSamples, 0);
   for (unsigned int ibin = 0; ibin < tpSamples; ++ibin) {
     // ibin - index for output TP
     // idx - index for samples + shift - filterPresamples
@@ -603,9 +604,10 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
       // threshold and the now sum is not a peak and the now sum is not
       // saturated does the current sum get zeroed
       if (applyVetoThreshold && sum[idx + 1] >= actualVetoThreshold &&
-          (sum[idx] < sum[idx + 1] || force_saturation[idx + 1]) && !force_saturation[idx])
+          (sum[idx] < sum[idx + 1] || force_saturation[idx + 1]) && !force_saturation[idx]) {
         output[ibin] = 0;
-      else {
+        vetoedTPs[ibin] = 1;
+      } else {
         // Here, either the "now" sum is a peak or the vetoing criteria are not satisfied
         // so assign the appropriate sum to the output
         output[ibin] = std::min<unsigned int>(sum[idx], QIE11_MAX_LINEARIZATION_ET);
@@ -626,6 +628,10 @@ void HcalTriggerPrimitiveAlgo::analyzeQIE11(IntegerCaloSamples& samples,
           << ") is not aligned with digi SOI (dgPresamples = " << dgPresamples << ")";
   }
   outcoder_->compress(output, finegrain, result);
+
+  result.setInputLinearFrame(samples);
+  result.setOutputLinearFrame(output);
+  result.setVetoedTPs(vetoedTPs);
 }
 
 void HcalTriggerPrimitiveAlgo::analyzeZDC(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result) {
@@ -903,6 +909,9 @@ void HcalTriggerPrimitiveAlgo::analyzeHFQIE10(const IntegerCaloSamples& samples,
   for (const auto& fg : finegrain)
     finegrain_converted.push_back(fg.to_ulong());
   outcoder_->compress(output, finegrain_converted, result);
+
+  result.setInputLinearFrame(samples);
+  result.setOutputLinearFrame(output);
 }
 
 void HcalTriggerPrimitiveAlgo::runZS(HcalTrigPrimDigiCollection& result) {

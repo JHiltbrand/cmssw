@@ -17,8 +17,8 @@
    <class name="HcalTriggerPrimitiveSample" ClassVersion="10">
     <version ClassVersion="10" checksum="4281939433"/>
    </class>
-   <class name="HcalTriggerPrimitiveDigi" ClassVersion="10">
-    <version ClassVersion="10" checksum="1988665638"/>
+   <class name="HcalTriggerPrimitiveDigi" ClassVersion="11">
+    <version ClassVersion="11" checksum="845537973"/>
    </class>
    <class name="HOTriggerPrimitiveDigi" ClassVersion="10">
     <version ClassVersion="10" checksum="3812852628"/>
