@@ -440,8 +440,16 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
       int lutId = getLUTId(cell);
       Lut& lut = inputLUT_[lutId];
       float ped = 0;
+      float pedwidth = 0;
       float gain = 0;
       uint32_t status = 0;
+
+      // Doing widths irrespective of LUTGeneration mode i.e. they are not present in L1TriggerObjects...
+      const HcalCalibrationWidths& calibrationWidths = conditions.getHcalCalibrationWidths(cell);
+      for (auto capId : {0, 1, 2, 3}) {
+        pedwidth += calibrationWidths.effpedestal(capId);
+      }
+      pedwidth /= 4.0;
 
       if (LUTGenerationMode_) {
         const HcalCalibrations& calibrations = conditions.getHcalCalibrations(cell);
@@ -535,17 +543,22 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
               }
             }
             if (allLinear_)
-              lut[adc] = (LutElement)std::min(
-                  std::max(0,
-                           int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection * containmentCorrection /
-                               linearLSB / cosh_ieta(cell.ietaAbs(), cell.depth(), HcalEndcap))),
-                  MASK);
+              lut[adc] =
+                  adc2fC(adc) - (ped + 3 * pedwidth) <= 0
+                      ? 0
+                      : (LutElement)std::min(std::max(0,
+                                                      int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
+                                                          containmentCorrection / linearLSB /
+                                                          cosh_ieta(cell.ietaAbs(), cell.depth(), HcalEndcap))),
+                                             MASK);
             else
               lut[adc] =
-                  (LutElement)std::min(std::max(0,
-                                                int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
-                                                    containmentCorrection / nominalgain_ / granularity)),
-                                       MASK);
+                  adc2fC(adc) - (ped + 3 * pedwidth) <= 0
+                      ? 0
+                      : (LutElement)std::min(std::max(0,
+                                                      int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
+                                                          containmentCorrection / nominalgain_ / granularity)),
+                                             MASK);
 
             unsigned int linearizedADC =
                 lut[adc];  // used for bits 12, 13, 14, 15 for Group 0 LUT for LLP time and depth bits that rely on linearized energies
@@ -575,8 +588,12 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
           if (isMasked)
             lut[adc] = 0;
           else {
-            lut[adc] = std::min(
-                std::max(0, int((adc2fC(adc) - ped) * gain * rcalib / lsb_ / cosh_ieta_[cell.ietaAbs()])), MASK);
+            lut[adc] =
+                adc2fC(adc) - (ped + 3 * pedwidth) <= 0
+                    ? 0
+                    : std::min(
+                          std::max(0, int((adc2fC(adc) - ped) * gain * rcalib / lsb_ / cosh_ieta_[cell.ietaAbs()])),
+                          MASK);
             if (adc > FG_HF_thresholds_[0])
               lut[adc] |= QIE10_LUT_MSB0;
             if (adc > FG_HF_thresholds_[1])
