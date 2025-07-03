@@ -130,7 +130,7 @@ private:
   TTree* outTree;
 
   int run;
-  int evt;
+  uint64_t evt;
   int ls;
 
   int nBxTrain;
@@ -315,7 +315,7 @@ void MahiDebugger::beginJob() {
   outTree = FileService->make<TTree>("HcalTree", "HcalTree");
 
   outTree->Branch("run", &run, "run/I");
-  outTree->Branch("evt", &evt, "evt/I");
+  outTree->Branch("evt", &evt, "evt/l");
   outTree->Branch("ls", &ls, "ls/I");
   outTree->Branch("nBxTrain", &nBxTrain, "nBxTrain/I");
 
@@ -365,7 +365,7 @@ void MahiDebugger::fillDescriptions(edm::ConfigurationDescriptions& descriptions
   desc.add<bool>("dynamicPed");
   desc.add<bool>("calculateArrivalTime");
   desc.add<int>("timeAlgo");
-  desc.add<double>("thEnergeticPulse");
+  desc.add<double>("thEnergeticPulses");
   desc.add<double>("ts4Thresh");
   desc.add<double>("chiSqSwitch");
   desc.add<bool>("applyTimeSlew");
