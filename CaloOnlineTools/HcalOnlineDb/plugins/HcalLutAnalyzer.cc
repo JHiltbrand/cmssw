@@ -73,7 +73,7 @@ private:
   double Pmax;
 
   edm::ESGetToken<HcalTopology, HcalRecNumberingRecord> tok_htopo_;
-  edm::ESGetToken<HcalElectronicsMap, HcalDbRecord> tok_emap_;
+  edm::ESGetToken<HcalElectronicsMap, HcalElectronicsMapRcd> tok_emap_;
 };
 
 HcalLutAnalyzer::HcalLutAnalyzer(const edm::ParameterSet& iConfig) {
@@ -94,7 +94,7 @@ HcalLutAnalyzer::HcalLutAnalyzer(const edm::ParameterSet& iConfig) {
   Pmax = iConfig.getParameter<double>("Pmax");
 
   tok_htopo_ = esConsumes<HcalTopology, HcalRecNumberingRecord>();
-  tok_emap_ = esConsumes<HcalElectronicsMap, HcalDbRecord>();
+  tok_emap_ = esConsumes<HcalElectronicsMap, HcalElectronicsMapRcd>();
 }
 
 void HcalLutAnalyzer::analyze(const edm::Event&, const edm::EventSetup& iSetup) {
@@ -360,6 +360,9 @@ void HcalLutAnalyzer::analyze(const edm::Event&, const edm::EventSetup& iSetup) 
   for (const auto& xml2 : xmls2) {
     HcalGenericDetId detid(xml2.first);
 
+    if (detid.null() or detid.isHcalZDCDetId())
+      continue;
+
     if (detid.genericSubdet() == HcalGenericDetId::HcalGenTriggerTower) {
       HcalTrigTowerDetId tid(detid.rawId());
       if (!topology->validHT(tid))
@@ -387,6 +390,10 @@ void HcalLutAnalyzer::analyze(const edm::Event&, const edm::EventSetup& iSetup) 
 
   for (const auto& xml1 : xmls1) {
     HcalGenericDetId detid(xml1.first);
+
+    if (detid.null() or detid.isHcalZDCDetId())
+      continue;
+
     const auto& lut1 = xml1.second;
 
     if (detid.genericSubdet() == HcalGenericDetId::HcalGenTriggerTower) {
