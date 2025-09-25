@@ -439,6 +439,18 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
     }
   }
 
+  auto tpParams = conditions.getHcalTPParameters();
+  const int auxi1 = tpParams->getAuxi1();
+
+  // The number of pedestal widths for ZS is packed into the third byte
+  // of the 32 bit auxi1 variable from HcalTPParameters
+  uint8_t nPedWidthsForZSfromDB = auxi1 & 0xFF0000;
+
+  // If overriding with corresponding param in python or the extracted value from third byte of HcalTPParameters auxi1 is 0,
+  // use the param from python. Otherwise, take the value as extracted from DB
+  uint8_t nPedWidthsForZSfinal =
+      (overrideDBnPedWidthsForZS_ or nPedWidthsForZSfromDB == 0) ? nPedWidthsForZS_ : nPedWidthsForZSfromDB;
+
   for (const auto& id : metadata->getAllChannels()) {
     if (id.det() == DetId::Hcal and topo_->valid(id)) {
       HcalDetId cell(id);
@@ -470,8 +482,15 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
       int lutId = getLUTId(cell);
       Lut& lut = inputLUT_[lutId];
       float ped = 0;
+      float pedwidth = 0;
       float gain = 0;
       uint32_t status = 0;
+
+      const HcalCalibrationWidths& calibrationWidths = conditions.getHcalCalibrationWidths(cell);
+      for (auto capId : {0, 1, 2, 3}) {
+        pedwidth += calibrationWidths.effpedestal(capId);
+      }
+      pedwidth /= 4.0;
 
       if (LUTGenerationMode_) {
         const HcalCalibrations& calibrations = conditions.getHcalCalibrations(cell);
@@ -565,17 +584,22 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
               }
             }
             if (allLinear_)
-              lut[adc] = (LutElement)std::min(
-                  std::max(0,
-                           int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection * containmentCorrection /
-                               linearLSB / cosh_ieta(cell.ietaAbs(), cell.depth(), HcalEndcap))),
-                  MASK);
+              lut[adc] =
+                  adc2fC(adc) - (ped + nPedWidthsForZSfinal * pedwidth) <= 0
+                      ? 0
+                      : (LutElement)std::min(std::max(0,
+                                                      int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
+                                                          containmentCorrection / linearLSB /
+                                                          cosh_ieta(cell.ietaAbs(), cell.depth(), HcalEndcap))),
+                                             MASK);
             else
               lut[adc] =
-                  (LutElement)std::min(std::max(0,
-                                                int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
-                                                    containmentCorrection / nominalgain_ / granularity)),
-                                       MASK);
+                  adc2fC(adc) - (ped + nPedWidthsForZSfinal * pedwidth) <= 0
+                      ? 0
+                      : (LutElement)std::min(std::max(0,
+                                                      int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
+                                                          containmentCorrection / nominalgain_ / granularity)),
+                                             MASK);
 
             unsigned int linearizedADC =
                 lut[adc];  // used for bits 12, 13, 14, 15 for Group 0 LUT for LLP time and depth bits that rely on linearized energies

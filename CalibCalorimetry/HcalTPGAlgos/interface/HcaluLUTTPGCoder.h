@@ -80,6 +80,10 @@ public:
   void setOverrideDBweightsAndFilterHE(bool overrideDBweightsAndFilterHE) {
     overrideDBweightsAndFilterHE_ = overrideDBweightsAndFilterHE;
   }
+  void setNpedWidthsForZS(uint8_t nPedWidthsForZS) { nPedWidthsForZS_ = nPedWidthsForZS; }
+  void setOverrideDBnPedWidthsForZS(bool overrideDBnPedWidthsForZS) {
+    overrideDBnPedWidthsForZS_ = overrideDBnPedWidthsForZS;
+  }
   void lookupMSB(const HBHEDataFrame& df, std::vector<bool>& msb) const;
   void lookupMSB(const QIE10DataFrame& df, std::vector<std::bitset<2>>& msb) const;
   void lookupMSB(const QIE11DataFrame& df, std::vector<std::bitset<2>>& msb) const;
@@ -137,6 +141,8 @@ private:
   std::unique_ptr<HcalPulseContainmentManager> pulseCorr_;
   bool overrideDBweightsAndFilterHB_ = false;
   bool overrideDBweightsAndFilterHE_ = false;
+  uint8_t nPedWidthsForZS_ = 0;
+  bool overrideDBnPedWidthsForZS_ = false;
 };
 
 #endif
