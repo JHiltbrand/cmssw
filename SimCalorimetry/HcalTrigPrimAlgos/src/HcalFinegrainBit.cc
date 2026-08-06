@@ -70,9 +70,9 @@ std::bitset<6> HcalFinegrainBit::compute(const HcalFinegrainBit::TowerTDC& tower
     int bit15 = (bit12_15set & 0b1000) >> 3;  // delayed energy passed
 
     // timing bits
-    if (TDC < 50) {  // exclude error code for TDC in HE (unpacked)
+    if (TDC < 50) {  // exclude error code for TDC
       if ((abs(tp_ieta) <= 16) || (i >= 1)) {
-        // count delayed / prompt hits either in HB, or in HE (excluding depth 1 due to backgrounds in HE)
+        // count delayed / prompt hits either in HB
         // Sim packing into Raw, has uncompressed TDC values (0-49) at the trigger primitive level. Packing (compressing HB TDC 6:2) happens in packer.
         // Hcal digis have compressed HB TDC (0-3)
         if (is_compressed == 1) {

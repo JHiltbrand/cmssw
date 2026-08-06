@@ -1,30 +1,29 @@
 #include "CalibFormats/CaloTPG/interface/CaloTPGRecord.h"
 #include "CalibFormats/CaloTPG/interface/CaloTPGTranscoder.h"
-#include "CalibFormats/HcalObjects/interface/HcalDbService.h"
+#include "CalibFormats/CaloTPG/interface/HcalTPGCompressor.h"
 #include "CalibFormats/HcalObjects/interface/HcalDbRecord.h"
+#include "CalibFormats/HcalObjects/interface/HcalDbService.h"
 #include "CalibFormats/HcalObjects/interface/HcalTPGCoder.h"
 #include "CalibFormats/HcalObjects/interface/HcalTPGRecord.h"
-#include "CalibFormats/CaloTPG/interface/HcalTPGCompressor.h"
 #include "CondFormats/HcalObjects/interface/HcalElectronicsMap.h"
 #include "CondFormats/HcalObjects/interface/HcalLutMetadata.h"
 #include "CondFormats/HcalObjects/interface/HcalTPChannelParameters.h"
 #include "CondFormats/DataRecord/interface/HcalLutMetadataRcd.h"
 #include "DataFormats/Common/interface/Handle.h"
-#include "DataFormats/HcalDigi/interface/HBHEDataFrame.h"
-#include "DataFormats/HcalDigi/interface/HFDataFrame.h"
-#include "DataFormats/HcalDigi/interface/HcalTriggerPrimitiveDigi.h"
 #include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
-#include "DataFormats/FEDRawData/interface/FEDRawDataCollection.h"
+#include "DataFormats/HcalDigi/interface/HcalTriggerPrimitiveDigi.h"
 #include "FWCore/Framework/interface/stream/EDProducer.h"
-#include "FWCore/Utilities/interface/ESGetToken.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/EventSetup.h"
+#include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "FWCore/PluginManager/interface/ModuleDef.h"
+#include "FWCore/Utilities/interface/ESGetToken.h"
+#include "Geometry/CaloGeometry/interface/CaloGeometry.h"
+#include "Geometry/HcalTowerAlgo/interface/HcalGeometry.h"
 #include "Geometry/HcalTowerAlgo/interface/HcalTrigTowerGeometry.h"
 #include "Geometry/Records/interface/CaloGeometryRecord.h"
-#include "Geometry/HcalTowerAlgo/interface/HcalGeometry.h"
-#include "Geometry/CaloGeometry/interface/CaloGeometry.h"
 #include "SimCalorimetry/HcalTrigPrimAlgos/interface/HcalTriggerPrimitiveAlgo.h"
 
 #include <algorithm>
@@ -42,32 +41,15 @@ private:
   HcalTriggerPrimitiveAlgo theAlgo_;
 
   /// input tags for HCAL digis
-  std::vector<edm::InputTag> inputLabel_;
   std::vector<edm::InputTag> inputUpgradeLabel_;
   // this seems a strange way of doing things
   edm::EDGetTokenT<QIE11DigiCollection> tok_hbhe_up_;
   edm::EDGetTokenT<QIE10DigiCollection> tok_hf_up_;
 
-  edm::EDGetTokenT<HBHEDigiCollection> tok_hbhe_;
-  edm::EDGetTokenT<HFDigiCollection> tok_hf_;
-
-  bool overrideDBvetoThresholdsHE_;
   bool overrideDBvetoThresholdsHB_;
-
-  bool overrideDBweightsAndFilterHE_;
   bool overrideDBweightsAndFilterHB_;
 
-  /// input tag for FEDRawDataCollection
-  edm::InputTag inputTagFEDRaw_;
-  edm::EDGetTokenT<FEDRawDataCollection> tok_raw_;
   double MinLongEnergy_, MinShortEnergy_, LongShortSlope_, LongShortOffset_;
-
-  bool runZS_;
-
-  bool runFrontEndFormatError_;
-
-  bool upgrade_;
-  bool legacy_;
 
   bool HFEMB_;
   edm::ParameterSet LongShortCut_;
@@ -81,36 +63,16 @@ private:
 };
 
 HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
-    : theAlgo_(ps.getParameter<bool>("peakFilter"),
-               ps.getParameter<std::vector<double> >("weights"),
-               ps.getParameter<int>("latency"),
-               ps.getParameter<uint32_t>("FG_threshold"),
-               ps.getParameter<std::vector<uint32_t> >("FG_HF_thresholds"),
+    : theAlgo_(ps.getParameter<std::vector<uint32_t> >("FG_HF_thresholds"),
                ps.getParameter<bool>("useTDCfromDB"),
-               ps.getParameter<uint32_t>("ZS_threshold"),
                ps.getParameter<int>("numberOfSamples"),
                ps.getParameter<int>("numberOfPresamples"),
                ps.getParameter<int>("numberOfFilterPresamplesHBQIE11"),
-               ps.getParameter<int>("numberOfFilterPresamplesHEQIE11"),
                ps.getParameter<int>("numberOfSamplesHF"),
                ps.getParameter<int>("numberOfPresamplesHF"),
-               ps.getParameter<bool>("useTDCInMinBiasBits"),
-               ps.getParameter<uint32_t>("MinSignalThreshold"),
-               ps.getParameter<uint32_t>("PMTNoiseThreshold")),
-      inputLabel_(ps.getParameter<std::vector<edm::InputTag> >("inputLabel")),
-      inputUpgradeLabel_(ps.getParameter<std::vector<edm::InputTag> >("inputUpgradeLabel")),
-      inputTagFEDRaw_(ps.getParameter<edm::InputTag>("InputTagFEDRaw")),
-      runZS_(ps.getParameter<bool>("RunZS")),
-      runFrontEndFormatError_(ps.getParameter<bool>("FrontEndFormatError")) {
-  std::vector<bool> upgrades = {
-      ps.getParameter<bool>("upgradeHB"), ps.getParameter<bool>("upgradeHE"), ps.getParameter<bool>("upgradeHF")};
-  upgrade_ = std::any_of(std::begin(upgrades), std::end(upgrades), [](bool a) { return a; });
-  legacy_ = std::any_of(std::begin(upgrades), std::end(upgrades), [](bool a) { return !a; });
-
-  overrideDBvetoThresholdsHE_ = ps.getParameter<bool>("overrideDBvetoThresholdsHE");
+               ps.getParameter<bool>("useTDCInMinBiasBits")),
+      inputUpgradeLabel_(ps.getParameter<std::vector<edm::InputTag> >("inputUpgradeLabel")) {
   overrideDBvetoThresholdsHB_ = ps.getParameter<bool>("overrideDBvetoThresholdsHB");
-
-  overrideDBweightsAndFilterHE_ = ps.getParameter<bool>("overrideDBweightsAndFilterHE");
   overrideDBweightsAndFilterHB_ = ps.getParameter<bool>("overrideDBweightsAndFilterHB");
 
   theAlgo_.setWeightsQIE11(ps.getParameter<edm::ParameterSet>("weightsQIE11"));
@@ -120,7 +82,6 @@ HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
     auto pset = ps.getUntrackedParameter<edm::ParameterSet>("parameters");
     theAlgo_.overrideParameters(pset);
   }
-  theAlgo_.setUpgradeFlags(upgrades[0], upgrades[1], upgrades[2]);
   theAlgo_.setFixSaturationFlag(ps.getParameter<bool>("applySaturationFix"));
 
   HFEMB_ = false;
@@ -139,24 +100,13 @@ HcalTrigPrimDigiProducer::HcalTrigPrimDigiProducer(const edm::ParameterSet& ps)
   tok_trigTowerGeom_ = esConsumes<HcalTrigTowerGeometry, CaloGeometryRecord>();
   tok_hcalTopo_ = esConsumes<HcalTopology, HcalRecNumberingRecord, edm::Transition::BeginRun>();
 
-  // register for data access
-  if (runFrontEndFormatError_) {
-    tok_raw_ = consumes<FEDRawDataCollection>(inputTagFEDRaw_);
-  }
+  tok_hbhe_up_ = consumes<QIE11DigiCollection>(inputUpgradeLabel_[0]);
+  tok_hf_up_ = consumes<QIE10DigiCollection>(inputUpgradeLabel_[1]);
 
-  if (legacy_) {
-    tok_hbhe_ = consumes<HBHEDigiCollection>(inputLabel_[0]);
-    tok_hf_ = consumes<HFDigiCollection>(inputLabel_[1]);
-  }
-
-  if (upgrade_) {
-    tok_hbhe_up_ = consumes<QIE11DigiCollection>(inputUpgradeLabel_[0]);
-    tok_hf_up_ = consumes<QIE10DigiCollection>(inputUpgradeLabel_[1]);
-  }
   tok_dbService_ = esConsumes<HcalDbService, HcalDbRecord>();
   tok_dbService_beginRun_ = esConsumes<HcalDbService, HcalDbRecord, edm::Transition::BeginRun>();
+
   produces<HcalTrigPrimDigiCollection>();
-  theAlgo_.setPeakFinderAlgorithm(ps.getParameter<int>("PeakFinderAlgorithm"));
 
   edm::ParameterSet hfSS = ps.getParameter<edm::ParameterSet>("tpScales").getParameter<edm::ParameterSet>("HF");
 
@@ -170,7 +120,6 @@ void HcalTrigPrimDigiProducer::beginRun(const edm::Run& run, const edm::EventSet
 
   const HcalElectronicsMap* emap = db->getHcalMapping();
 
-  int lastHERing = topo->lastHERing();
   int lastHBRing = topo->lastHBRing();
 
   std::vector<HcalElectronicsId> vIds = emap->allElectronicsIdTrigger();
@@ -210,20 +159,11 @@ void HcalTrigPrimDigiProducer::beginRun(const edm::Run& run, const edm::EventSet
         theAlgo_.setNumFilterPresamplesHBQIE11(presamples);
         theAlgo_.setWeightQIE11(aieta, fixedPointWeight);
       }
-    } else if (aieta < lastHERing) {
-      if (!overrideDBvetoThresholdsHE_) {
-        theAlgo_.setCodedVetoThreshold(aieta, codedVetoThreshold);
-      }
-      if (!overrideDBweightsAndFilterHE_) {
-        theAlgo_.setNumFilterPresamplesHEQIE11(presamples);
-        theAlgo_.setWeightQIE11(aieta, fixedPointWeight);
-      }
     }
   }
 }
 
 void HcalTrigPrimDigiProducer::produce(edm::Event& iEvent, const edm::EventSetup& eventSetup) {
-  // Step A: get the conditions, for the decoding
   edm::ESHandle<HcalTPGCoder> inputCoder = eventSetup.getHandle(tok_tpgCoder_);
 
   edm::ESHandle<CaloTPGTranscoder> outTranscoder = eventSetup.getHandle(tok_tpgTranscoder_);
@@ -233,71 +173,35 @@ void HcalTrigPrimDigiProducer::produce(edm::Event& iEvent, const edm::EventSetup
 
   edm::ESHandle<HcalTrigTowerGeometry> pG = eventSetup.getHandle(tok_trigTowerGeom_);
 
-  // Step B: Create empty output
   std::unique_ptr<HcalTrigPrimDigiCollection> result(new HcalTrigPrimDigiCollection());
-
-  edm::Handle<HBHEDigiCollection> hbheDigis;
-  edm::Handle<HFDigiCollection> hfDigis;
 
   edm::Handle<QIE11DigiCollection> hbheUpDigis;
   edm::Handle<QIE10DigiCollection> hfUpDigis;
 
-  if (legacy_) {
-    iEvent.getByToken(tok_hbhe_, hbheDigis);
-    iEvent.getByToken(tok_hf_, hfDigis);
+  iEvent.getByToken(tok_hbhe_up_, hbheUpDigis);
+  iEvent.getByToken(tok_hf_up_, hfUpDigis);
 
-    // protect here against missing input collections
-    // there is no protection in HcalTriggerPrimitiveAlgo
+  if (!hbheUpDigis.isValid()) {
+    edm::LogInfo("HcalTrigPrimDigiProducer")
+        << "\nWarning: Upgrade HBHEDigiCollection with input tag " << inputUpgradeLabel_[0]
+        << "\nrequested in configuration, but not found in the event."
+        << "\nQuit returning empty product." << std::endl;
 
-    if (!hbheDigis.isValid() and legacy_) {
-      edm::LogInfo("HcalTrigPrimDigiProducer") << "\nWarning: HBHEDigiCollection with input tag " << inputLabel_[0]
-                                               << "\nrequested in configuration, but not found in the event."
-                                               << "\nQuit returning empty product." << std::endl;
+    // put empty HcalTrigPrimDigiCollection in the event
+    iEvent.put(std::move(result));
 
-      // put empty HcalTrigPrimDigiCollection in the event
-      iEvent.put(std::move(result));
-
-      return;
-    }
-
-    if (!hfDigis.isValid() and legacy_) {
-      edm::LogInfo("HcalTrigPrimDigiProducer") << "\nWarning: HFDigiCollection with input tag " << inputLabel_[1]
-                                               << "\nrequested in configuration, but not found in the event."
-                                               << "\nQuit returning empty product." << std::endl;
-
-      // put empty HcalTrigPrimDigiCollection in the event
-      iEvent.put(std::move(result));
-
-      return;
-    }
+    return;
   }
 
-  if (upgrade_) {
-    iEvent.getByToken(tok_hbhe_up_, hbheUpDigis);
-    iEvent.getByToken(tok_hf_up_, hfUpDigis);
+  if (!hfUpDigis.isValid()) {
+    edm::LogInfo("HcalTrigPrimDigiProducer") << "\nWarning: HFDigiCollection with input tag " << inputUpgradeLabel_[1]
+                                             << "\nrequested in configuration, but not found in the event."
+                                             << "\nQuit returning empty product." << std::endl;
 
-    if (!hbheUpDigis.isValid() and upgrade_) {
-      edm::LogInfo("HcalTrigPrimDigiProducer")
-          << "\nWarning: Upgrade HBHEDigiCollection with input tag " << inputUpgradeLabel_[0]
-          << "\nrequested in configuration, but not found in the event."
-          << "\nQuit returning empty product." << std::endl;
+    // put empty HcalTrigPrimDigiCollection in the event
+    iEvent.put(std::move(result));
 
-      // put empty HcalTrigPrimDigiCollection in the event
-      iEvent.put(std::move(result));
-
-      return;
-    }
-
-    if (!hfUpDigis.isValid() and upgrade_) {
-      edm::LogInfo("HcalTrigPrimDigiProducer") << "\nWarning: HFDigiCollection with input tag " << inputUpgradeLabel_[1]
-                                               << "\nrequested in configuration, but not found in the event."
-                                               << "\nQuit returning empty product." << std::endl;
-
-      // put empty HcalTrigPrimDigiCollection in the event
-      iEvent.put(std::move(result));
-
-      return;
-    }
+    return;
   }
 
   edm::ESHandle<HcalDbService> pSetup = eventSetup.getHandle(tok_dbService_);
@@ -312,74 +216,19 @@ void HcalTrigPrimDigiProducer::produce(edm::Event& iEvent, const edm::EventSetup
                                      *pSetup);  //inputs values that cut will be based on
   }
 
-  // Step C: Invoke the algorithm, passing in inputs and getting back outputs.
-  if (legacy_ and not upgrade_) {
-    theAlgo_.run(inputCoder.product(),
-                 outTranscoder->getHcalCompressor().get(),
-                 pSetup.product(),
-                 *result,
-                 &(*pG),
-                 rctlsb,
-                 hfembit,
-                 *hbheDigis,
-                 *hfDigis);
-  } else if (legacy_ and upgrade_) {
-    theAlgo_.run(inputCoder.product(),
-                 outTranscoder->getHcalCompressor().get(),
-                 pSetup.product(),
-                 *result,
-                 &(*pG),
-                 rctlsb,
-                 hfembit,
-                 *hbheDigis,
-                 *hfDigis,
-                 *hbheUpDigis,
-                 *hfUpDigis);
-  } else {
-    theAlgo_.run(inputCoder.product(),
-                 outTranscoder->getHcalCompressor().get(),
-                 pSetup.product(),
-                 *result,
-                 &(*pG),
-                 rctlsb,
-                 hfembit,
-                 *hbheUpDigis,
-                 *hfUpDigis);
-  }
-
-  // Step C.1: Run FE Format Error / ZS for real data.
-  if (runFrontEndFormatError_) {
-    const HcalElectronicsMap* emap = pSetup->getHcalMapping();
-
-    edm::Handle<FEDRawDataCollection> fedHandle;
-    iEvent.getByToken(tok_raw_, fedHandle);
-
-    if (fedHandle.isValid() && emap != nullptr) {
-      theAlgo_.runFEFormatError(fedHandle.product(), emap, *result);
-    } else {
-      edm::LogInfo("HcalTrigPrimDigiProducer") << "\nWarning: FEDRawDataCollection with input tag " << inputTagFEDRaw_
-                                               << "\nrequested in configuration, but not found in the event."
-                                               << "\nQuit returning empty product." << std::endl;
-
-      // produce empty HcalTrigPrimDigiCollection and put it in the event
-      std::unique_ptr<HcalTrigPrimDigiCollection> emptyResult(new HcalTrigPrimDigiCollection());
-
-      iEvent.put(std::move(emptyResult));
-
-      return;
-    }
-  }
-
-  if (runZS_)
-    theAlgo_.runZS(*result);
+  theAlgo_.run(inputCoder.product(),
+               outTranscoder->getHcalCompressor().get(),
+               pSetup.product(),
+               *result,
+               &(*pG),
+               rctlsb,
+               hfembit,
+               *hbheUpDigis,
+               *hfUpDigis);
 
   edm::LogInfo("HcalTrigPrimDigiProducer") << "HcalTrigPrims: " << result->size();
 
-  // Step D: Put outputs into event
   iEvent.put(std::move(result));
 }
-
-#include "FWCore/PluginManager/interface/ModuleDef.h"
-#include "FWCore/Framework/interface/MakerMacros.h"
 
 DEFINE_FWK_MODULE(HcalTrigPrimDigiProducer);
