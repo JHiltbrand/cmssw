@@ -33,8 +33,8 @@ public:
   void compress(const IntegerCaloSamples& ics,
                 const std::vector<bool>& featureBits,
                 HcalTriggerPrimitiveDigi& tp) const override;
-  std::vector<unsigned short> getLinearizationLUT(HcalDetId id) const;
-  std::vector<unsigned short> getLinearizationLUT(HcalZDCDetId id, bool ootpu_lut) const;
+  std::vector<unsigned short> getLinearizationLUT(HcalDetId id) const override;
+  std::vector<unsigned short> getLinearizationLUT(HcalZDCDetId id, bool ootpu_lut) const override;
 
   void make_cosh_ieta_map(void);
   void update(const HcalDbService& conditions);

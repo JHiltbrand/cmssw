@@ -30,6 +30,9 @@ public:
   virtual void compress(const IntegerCaloSamples& ics,
                         const std::vector<bool>& featureBits,
                         HcalTriggerPrimitiveDigi& tp) const = 0;
+
+  virtual std::vector<unsigned short> getLinearizationLUT(HcalDetId id) const = 0;
+  virtual std::vector<unsigned short> getLinearizationLUT(HcalZDCDetId id, bool ootput_lut) const = 0;
 };
 
 #endif
