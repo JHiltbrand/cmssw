@@ -2,10 +2,10 @@
 #define CALIBFORMATS_HCALOBJECTS_HCALTPGCODER_H 1
 
 #include "CalibFormats/CaloObjects/interface/IntegerCaloSamples.h"
+#include "DataFormats/HcalDetId/interface/HcalZDCDetId.h"
 #include "DataFormats/HcalDigi/interface/HcalTriggerPrimitiveDigi.h"
 #include "DataFormats/HcalDigi/interface/QIE10DataFrame.h"
 #include "DataFormats/HcalDigi/interface/QIE11DataFrame.h"
-#include "DataFormats/HcalDetId/interface/HcalZDCDetId.h"
 
 // forward declaration of EventSetup is all that is needed here
 namespace edm {
@@ -30,8 +30,6 @@ public:
   virtual void compress(const IntegerCaloSamples& ics,
                         const std::vector<bool>& featureBits,
                         HcalTriggerPrimitiveDigi& tp) const = 0;
-  virtual float getLUTPedestal(HcalDetId id) const = 0;
-  virtual float getLUTGain(HcalDetId id) const = 0;
 };
 
 #endif

@@ -10,23 +10,23 @@
 //         Created:  Tue Mar 18 14:30:20 CDT 2008
 //
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <iconv.h>
-#include <sys/time.h>
-
+#include "CalibCalorimetry/HcalTPGAlgos/interface/HcalEmap.h"
 #include "CalibCalorimetry/HcalTPGAlgos/interface/LutXml.h"
 #include "CalibCalorimetry/HcalTPGAlgos/interface/XMLProcessor.h"
-#include "md5.h"
-#include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include "CalibCalorimetry/HcalTPGAlgos/interface/HcalEmap.h"
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
-#include "DataFormats/HcalDetId/interface/HcalZDCDetId.h"
 #include "DataFormats/HcalDetId/interface/HcalTrigTowerDetId.h"
+#include "DataFormats/HcalDetId/interface/HcalZDCDetId.h"
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
 
-using namespace std;
+#include <iconv.h>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <sys/time.h>
+#include <vector>
+
+#include "md5.h"
+
 XERCES_CPP_NAMESPACE_USE
 
 LutXml::Config::_Config() {
@@ -50,6 +50,7 @@ LutXml::Config::_Config() {
   targetfirmware = "default_revision";
   generalizedindex = -1;
   weight = -1;
+
   // Default to keeping veto disabled
   codedvetothreshold = 0;
 }
@@ -69,13 +70,6 @@ void LutXml::init(void) {
   root = XMLString::transcode("CFGBrickSet");
   brick = XMLString::transcode("CFGBrick");
   brickElem = nullptr;
-}
-
-std::vector<unsigned int> *LutXml::getLutFast(uint32_t det_id) {
-  if (lut_map.find(det_id) != lut_map.end())
-    return &(lut_map)[det_id];
-  edm::LogError("LutXml") << "LUT not found, null pointer is returned";
-  return nullptr;
 }
 
 // checksums_xml is 0 by default
@@ -106,7 +100,7 @@ void LutXml::addLut(LutXml::Config &_config, XMLDOMBlock *checksums_xml) {
     addParameter("FIBER", "int", _config.fiber);
     addParameter("FIBERCHAN", "int", _config.fiberchan);
     addParameter("DEPTH", "int", _config.depth);
-    addData(to_string(_config.lut.size()), "hex", _config.lut);
+    addData(std::to_string(_config.lut.size()), "hex", _config.lut);
   } else if (_config.lut_type == 2 || _config.lut_type == 4) {  // compression LUT or HE feature bit LUT
     addParameter("IETA", "int", _config.ieta);
     addParameter("IPHI", "int", _config.iphi);
@@ -127,16 +121,16 @@ void LutXml::addLut(LutXml::Config &_config, XMLDOMBlock *checksums_xml) {
                                   << " is not in range (1, 2048) ! Vetoing will not be done in PFA1' !";
       }
     }
-    addData(to_string(_config.lut.size()), "hex", _config.lut);
+    addData(std::to_string(_config.lut.size()), "hex", _config.lut);
   } else if (_config.lut_type == 5) {  // channel masks
     addParameter("MASK_TYPE", "string", "TRIGGERCHANMASK");
-    addData(to_string(_config.mask.size()), "hex", _config.mask);
+    addData(std::to_string(_config.mask.size()), "hex", _config.mask);
   } else if (_config.lut_type == 6) {  // adc threshold for tdc mask
     addParameter("THRESH_TYPE", "string", "TRIGINTIME");
-    addData(to_string(_config.mask.size()), "hex", _config.mask);
+    addData(std::to_string(_config.mask.size()), "hex", _config.mask);
   } else if (_config.lut_type == 7) {  // tdc mask
     addParameter("TDCMAP_TYPE", "string", "TRIGINTIME");
-    addData(to_string(_config.mask.size()), "hex", _config.mask);
+    addData(std::to_string(_config.mask.size()), "hex", _config.mask);
   } else {
     edm::LogError("LutXml") << "Unknown LUT type...produced XML will be incorrect";
   }
@@ -262,56 +256,6 @@ std::string LutXml::get_checksum(std::vector<unsigned int> &lut) {
     result << std::hex << (((int)(digest[i])) & 0xFF);
 
   return result.str();
-}
-
-int LutXml::test_access(std::string filename) {
-  edm::LogInfo("LutXml") << "Created map size: " << lut_map.size();
-
-  struct timeval _t;
-  gettimeofday(&_t, nullptr);
-  double _time = (double)(_t.tv_sec) + (double)(_t.tv_usec) / 1000000.0;
-
-  HcalEmap _emap("./backup/official_emap_v6.04_080905.txt");
-  std::vector<HcalEmap::HcalEmapRow> &_map = _emap.get_map();
-  edm::LogInfo("LutXml") << "HcalEmap contains " << _map.size() << " entries";
-
-  int _counter = 0;
-  for (std::vector<HcalEmap::HcalEmapRow>::const_iterator row = _map.begin(); row != _map.end(); ++row) {
-    if (row->subdet == "HB") {
-      HcalDetId det_id(HcalBarrel, row->ieta, row->iphi, row->idepth);
-      uint32_t raw_id = det_id.rawId();
-      std::vector<unsigned int> *l = getLutFast(raw_id);
-      if (l)
-        _counter++;
-    }
-    if (row->subdet == "HE") {
-      HcalDetId det_id(HcalEndcap, row->ieta, row->iphi, row->idepth);
-      uint32_t raw_id = det_id.rawId();
-      std::vector<unsigned int> *l = getLutFast(raw_id);
-      if (l)
-        _counter++;
-    }
-    if (row->subdet == "HF") {
-      HcalDetId det_id(HcalForward, row->ieta, row->iphi, row->idepth);
-      uint32_t raw_id = det_id.rawId();
-      std::vector<unsigned int> *l = getLutFast(raw_id);
-      if (l)
-        _counter++;
-    }
-    if (row->subdet == "HO") {
-      HcalDetId det_id(HcalOuter, row->ieta, row->iphi, row->idepth);
-      uint32_t raw_id = det_id.rawId();
-      std::vector<unsigned int> *l = getLutFast(raw_id);
-      if (l)
-        _counter++;
-    }
-  }
-  gettimeofday(&_t, nullptr);
-  edm::LogInfo("LutXml") << "access to " << _counter
-                         << " HCAL channels took: " << (double)(_t.tv_sec) + (double)(_t.tv_usec) / 1000000.0 - _time
-                         << "sec";
-
-  return 0;
 }
 
 DetId LutXml::detid_from_crate(

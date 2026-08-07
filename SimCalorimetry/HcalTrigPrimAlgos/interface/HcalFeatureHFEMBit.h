@@ -1,9 +1,9 @@
 #ifndef SimCalorimetry_HcalTPGAlgos_interface_HcalFeatureHFEMBit_h_included
 #define SimCalorimetry_HcalTPGAlgos_interface_HcalFeatureHFEMBit_h_included 1
 
-#include "SimCalorimetry/HcalTrigPrimAlgos/interface/HcalFeatureBit.h"
-#include "CalibFormats/HcalObjects/interface/HcalDbService.h"
 #include "CalibFormats/HcalObjects/interface/HcalCoderDb.h"
+#include "CalibFormats/HcalObjects/interface/HcalDbService.h"
+#include "SimCalorimetry/HcalTrigPrimAlgos/interface/HcalFeatureBit.h"
 
 class HcalFeatureHFEMBit : public HcalFeatureBit {
 public:
@@ -24,7 +24,6 @@ public:
                     bool validLong1,
                     bool validLong2,
                     int idx) const override;
-  bool fineGrainbit(const HFDataFrame& shortDigi, const HFDataFrame& longDigi, int idx) const override;
 
 private:
   template <typename T>

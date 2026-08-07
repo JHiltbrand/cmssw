@@ -74,7 +74,6 @@ public:
   void overrideParameters(const edm::ParameterSet& ps);
 
 private:
-  /// adds the signal to the map
   void addSignal(const QIE10DataFrame& frame);
   void addSignal(const QIE11DataFrame& frame);
   void addSignal(const IntegerCaloSamples& samples);
@@ -84,12 +83,10 @@ private:
   bool passTDC(const QIE10DataFrame& digi, int ts) const;
   bool validChannel(const QIE10DataFrame& digi, int ts) const;
 
-  // 2017 and later: QIE11
   void analyzeQIE11(IntegerCaloSamples& samples,
                     std::vector<bool> sample_saturation,
                     HcalTriggerPrimitiveDigi& result,
                     const HcalFinegrainBit& fg_algo);
-  // With dual anode readout
   void analyzeHFQIE10(const IntegerCaloSamples& SAMPLES,
                       HcalTriggerPrimitiveDigi& result,
                       const int HF_LUMI_SHIFT,
@@ -97,7 +94,6 @@ private:
 
   void analyzeZDC(IntegerCaloSamples& samples, HcalTriggerPrimitiveDigi& result);
 
-  // Member initialized by constructor
   const HcaluLUTTPGCoder* incoder_;
   const HcalTPGCompressor* outcoder_;
   const HcalDbService* conditions_;
@@ -147,9 +143,6 @@ private:
   // ==============================
   // Map from FG id to veto booleans
   HcalFeatureBit* LongvrsShortCut;
-
-  typedef std::map<HcalTrigTowerDetId, std::vector<bool>> FGbitMap;
-  FGbitMap fgMap_;
 
   typedef std::vector<HcalFinegrainBit::Tower> FGUpgradeContainer;
   typedef std::map<HcalTrigTowerDetId, FGUpgradeContainer> FGUpgradeMap;
@@ -204,7 +197,6 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
   fgUpgradeTDCMap_.clear();
   theHFUpgradeDetailMap.clear();
 
-  // Add all digi collections
   addDigis(digis...);
 
   // Prepare the fine-grain calculation algorithm for HB
@@ -228,7 +220,6 @@ void HcalTriggerPrimitiveAlgo::run(const HcalTPGCoder* incoder,
     }
   }
 
-  // Free up some memory
   theSumMap.clear();
   theSatMap.clear();
   theTowerMapFGSum.clear();

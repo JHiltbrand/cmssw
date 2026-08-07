@@ -33,8 +33,6 @@ public:
   void compress(const IntegerCaloSamples& ics,
                 const std::vector<bool>& featureBits,
                 HcalTriggerPrimitiveDigi& tp) const override;
-  float getLUTPedestal(HcalDetId id) const override;
-  float getLUTGain(HcalDetId id) const override;
   std::vector<unsigned short> getLinearizationLUT(HcalDetId id) const;
   std::vector<unsigned short> getLinearizationLUT(HcalZDCDetId id, bool ootpu_lut) const;
 
@@ -46,9 +44,7 @@ public:
   void setOverrideHBLLP(bool overrideHBLLP) { overrideHBLLP_ = overrideHBLLP; };
   void setHBLLPthresholds(const std::array<uint32_t, 4>& llpthresholds) { HB_LLP_thresholds_ = llpthresholds; };
   void setMaskBit(int bit) { bitToMask_ = bit; };
-  void setAllLinear(double lsb11) {
-    linearLSB_QIE11_ = lsb11;
-  };
+  void setAllLinear(double lsb11) { linearLSB_QIE11_ = lsb11; };
 
   void set1TSContainHB(bool contain1TSHB) { contain1TSHB_ = contain1TSHB; }
   void setContainPhaseHB(double containPhaseNSHB) { containPhaseNSHB_ = containPhaseNSHB; }
@@ -65,7 +61,6 @@ public:
   void lookupMSB(const QIE11DataFrame& df, std::vector<std::bitset<2>>& msb) const;
 
   int getLUTId(HcalSubdetector id, int ieta, int iphi, int depth) const;
-  int getLUTId(uint32_t rawid) const;
   int getLUTId(const HcalDetId& detid) const;
   int getLUTId(const HcalZDCDetId& detid) const;
 
@@ -101,7 +96,6 @@ private:
   std::vector<float> gain_;
   std::vector<float> ped_;
   std::vector<double> cosh_ieta_;
-  bool allLinear_;
   bool contain1TSHB_;
   double containPhaseNSHB_ = 6.0;
   bool applyFixPCC_;

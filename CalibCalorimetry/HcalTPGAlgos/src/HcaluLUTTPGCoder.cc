@@ -59,7 +59,6 @@ HcaluLUTTPGCoder::HcaluLUTTPGCoder()
       maxDepthHF_{},
       sizeHF_{},
       sizeZDC_{},
-      allLinear_{},
       contain1TSHB_{},
       applyFixPCC_{},
       linearLSB_QIE11_{} {}
@@ -78,7 +77,6 @@ void HcaluLUTTPGCoder::init(const HcalTopology* top, const HcalElectronicsMap* e
   overrideHBLLP_ = false;
   HB_LLP_thresholds_.fill(0);
   bitToMask_ = 0;
-  allLinear_ = false;
   contain1TSHB_ = false;
   applyFixPCC_ = false;
   linearLSB_QIE11_ = 1.;
@@ -133,11 +131,6 @@ int HcaluLUTTPGCoder::getLUTId(HcalSubdetector id, int ieta, int iphi, int depth
       retval += 9;
   }
   return retval;
-}
-
-int HcaluLUTTPGCoder::getLUTId(uint32_t rawid) const {
-  HcalDetId detid(rawid);
-  return getLUTId(detid.subdet(), detid.ieta(), detid.iphi(), detid.depth());
 }
 
 int HcaluLUTTPGCoder::getLUTId(const HcalDetId& detid) const {
@@ -342,11 +335,10 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
 
       // Input LUT for HB/HF
       if (subdet == HcalBarrel) {
-
         double correctionPhaseNS = conditions.getHcalRecoParam(cell)->correctionPhaseNS();
 
         if (qieType == QIE11 and overrideDBweightsAndFilterHB_)
-            correctionPhaseNS = containPhaseNSHB_;
+          correctionPhaseNS = containPhaseNSHB_;
 
         for (unsigned int adc = 0; adc < SIZE; ++adc) {
           if (isMasked)
@@ -383,14 +375,13 @@ void HcaluLUTTPGCoder::update(const HcalDbService& conditions) {
               }
             }
 
-            lut[adc] =
-                adc2fC(adc) - (ped + nPedWidthsForZSfinal * pedwidth) <= 0
-                    ? 0
-                    : (LutElement)std::min(std::max(0,
-                                                    int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
-                                                        containmentCorrection / linearLSB /
-                                                        cosh_ieta_[cell.ietaAbs()])),
-                                           MASK);
+            lut[adc] = adc2fC(adc) - (ped + nPedWidthsForZSfinal * pedwidth) <= 0
+                           ? 0
+                           : (LutElement)std::min(
+                                 std::max(0,
+                                          int((adc2fC(adc) - ped) * gain * rcalib * nonlinearityCorrection *
+                                              containmentCorrection / linearLSB / cosh_ieta_[cell.ietaAbs()])),
+                                 MASK);
 
             unsigned int linearizedADC =
                 lut[adc];  // used for bits 12, 13, 14, 15 for Group 0 LUT for LLP time and depth bits that rely on linearized energies
@@ -563,16 +554,6 @@ std::vector<unsigned short> HcaluLUTTPGCoder::group0FGbits(const QIE11DataFrame&
   return group0LLPbits;
 }
 
-float HcaluLUTTPGCoder::getLUTPedestal(HcalDetId id) const {
-  int lutId = getLUTId(id);
-  return ped_.at(lutId);
-}
-
-float HcaluLUTTPGCoder::getLUTGain(HcalDetId id) const {
-  int lutId = getLUTId(id);
-  return gain_.at(lutId);
-}
-
 std::vector<unsigned short> HcaluLUTTPGCoder::getLinearizationLUT(HcalDetId id) const {
   int lutId = getLUTId(id);
   return inputLUT_.at(lutId);
@@ -604,4 +585,3 @@ void HcaluLUTTPGCoder::lookupMSB(const QIE11DataFrame& df, std::vector<std::bits
     msb[i][1] = lut.at(df[i].adc()) & QIE11_LUT_MSB1;
   }
 }
-

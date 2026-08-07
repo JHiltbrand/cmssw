@@ -33,7 +33,6 @@ class HcalTrigPrimDigiProducer : public edm::stream::EDProducer<edm::stream::Wat
 public:
   explicit HcalTrigPrimDigiProducer(const edm::ParameterSet& ps);
 
-  /**Produces the EDM products,*/
   void beginRun(const edm::Run& r, const edm::EventSetup& c) override;
   void produce(edm::Event& e, const edm::EventSetup& c) override;
 
@@ -42,7 +41,7 @@ private:
 
   /// input tags for HCAL digis
   std::vector<edm::InputTag> inputUpgradeLabel_;
-  // this seems a strange way of doing things
+
   edm::EDGetTokenT<QIE11DigiCollection> tok_hbhe_up_;
   edm::EDGetTokenT<QIE10DigiCollection> tok_hf_up_;
 

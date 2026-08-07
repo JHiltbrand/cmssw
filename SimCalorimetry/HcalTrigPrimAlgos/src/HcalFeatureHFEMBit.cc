@@ -1,9 +1,5 @@
-
-//HcalFeatureHFEMBit
-//version 2.0
-
-#include "SimCalorimetry/HcalTrigPrimAlgos/interface/HcalFeatureHFEMBit.h"
 #include "CondFormats/HcalObjects/interface/HcalQIECoder.h"
+#include "SimCalorimetry/HcalTrigPrimAlgos/interface/HcalFeatureHFEMBit.h"
 
 HcalFeatureHFEMBit::HcalFeatureHFEMBit(double ShortMinE,
                                        double LongMinE,
@@ -19,18 +15,6 @@ HcalFeatureHFEMBit::HcalFeatureHFEMBit(double ShortMinE,
 }
 
 HcalFeatureHFEMBit::~HcalFeatureHFEMBit() {}
-
-bool HcalFeatureHFEMBit::fineGrainbit(const HFDataFrame& shortDigi, const HFDataFrame& longDigi, int idx) const {
-  float shortE = getE(shortDigi, idx);
-  float longE = getE(longDigi, idx);
-
-  if (shortE < ShortMinE_)
-    return false;
-  if (longE < LongMinE_)
-    return false;
-
-  return (shortE < (longE - ShortLongCutOffset_) * ShortLongCutSlope_);
-}
 
 bool HcalFeatureHFEMBit::fineGrainbit(const QIE10DataFrame& short1,
                                       const QIE10DataFrame& short2,

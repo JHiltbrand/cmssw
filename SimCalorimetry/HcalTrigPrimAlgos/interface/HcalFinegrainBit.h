@@ -1,9 +1,10 @@
 #ifndef HcalSimAlgos_HcalFinegrainBit_h
 #define HcalSimAlgos_HcalFinegrainBit_h
 
+#include "DataFormats/HcalDetId/interface/HcalTrigTowerDetId.h"
+
 #include <array>
 #include <bitset>
-#include "DataFormats/HcalDetId/interface/HcalTrigTowerDetId.h"
 
 class HcalFinegrainBit {
 public:

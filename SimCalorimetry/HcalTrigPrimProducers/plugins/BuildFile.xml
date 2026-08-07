@@ -1,4 +1,3 @@
-<use name="DataFormats/L1GlobalTrigger"/>
 <use name="FWCore/Framework"/>
 <use name="FWCore/ParameterSet"/>
 <use name="SimCalorimetry/HcalTrigPrimAlgos"/>

@@ -18,12 +18,13 @@
 //         Created:  Tue Mar 18 14:30:33 CDT 2008
 //
 
-#include <vector>
-#include <map>
 #include "CalibCalorimetry/HcalTPGAlgos/interface/XMLDOMBlock.h"
-#include "DataFormats/DetId/interface/DetId.h"
 #include "CondFormats/HcalObjects/interface/HcalElectronicsMap.h"
+#include "DataFormats/DetId/interface/DetId.h"
+
 #include <cstdint>
+#include <map>
+#include <vector>
 
 class LutXml : public XMLDOMBlock {
 public:
@@ -51,27 +52,12 @@ public:
   void addLut(Config& _config, XMLDOMBlock* checksums_xml = nullptr);
   std::string& getCurrentBrick(void);
 
-  std::vector<unsigned int>* getLutFast(uint32_t det_id);
-  //
-  //_____ following removed as a xalan-c component_____________________
-  //
-  //std::vector<unsigned int> getLut( int lut_type, int crate, int slot, int topbottom, int fiber, int fiber_channel );
-
   DetId detid_from_crate(int crate, int slot, int fiber, int fiberch, bool isTrigger, const HcalElectronicsMap* emap);
   int a_to_i(char* inbuf);
   int create_lut_map(const HcalElectronicsMap* emap);
 
   static std::string get_checksum(std::vector<unsigned int>& lut);
 
-  //
-  //_____ following removed as a xalan-c component_____________________
-  //
-  //int test_xpath( std::string filename );
-  int test_access(std::string filename);
-
-  //LutXml & operator+=( const LutXml & other);
-
-  //Iterators and find
   typedef std::map<uint32_t, std::vector<unsigned int> >::const_iterator const_iterator;
   const_iterator begin() const;
   const_iterator end() const;
@@ -90,7 +76,6 @@ protected:
 
   XERCES_CPP_NAMESPACE::DOMElement* brickElem;
 
-  //std::map<uint32_t,std::vector<unsigned int> > * lut_map;
   std::map<uint32_t, std::vector<unsigned int> > lut_map;
 };
 

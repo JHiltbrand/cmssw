@@ -2,7 +2,6 @@
 #define SimCalorimetry_HcalTPGAlgos_interface_HcalFeatureBit_h_included 1
 
 #include "DataFormats/HcalDetId/interface/HcalDetId.h"
-#include "DataFormats/HcalDigi/interface/HFDataFrame.h"
 #include "DataFormats/HcalDigi/interface/QIE10DataFrame.h"
 
 class HcalFeatureBit {
@@ -20,6 +19,5 @@ public:
                             bool validLong1,
                             bool validLong2,
                             int idx) const = 0;
-  virtual bool fineGrainbit(const HFDataFrame& shortDigi, const HFDataFrame& longDigi, int idx) const = 0;
 };
 #endif
